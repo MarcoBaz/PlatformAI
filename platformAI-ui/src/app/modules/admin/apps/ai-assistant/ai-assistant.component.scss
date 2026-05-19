@@ -1,0 +1,150 @@
+ai-assistant {
+    display: block;
+    height: 100%;
+
+    .ai-assistant-container {
+        height: 100%;
+    }
+
+    // mat-drawer-content: Angular Material imposta position:relative e overflow:auto.
+    // overflow:hidden evita la doppia scrollbar; position:relative è già di default
+    // ma lo forziamo come anchor per il wrapper figlio con position:absolute inset-0.
+    mat-drawer-content.mat-drawer-content {
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    // Stili per il contenuto dei messaggi AI (supporto markdown-like)
+    .ai-message-content {
+        line-height: 1.6;
+
+        p {
+            margin-bottom: 0.75rem;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        strong, b {
+            font-weight: 600;
+        }
+
+        em, i {
+            font-style: italic;
+        }
+
+        code {
+            @apply bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm font-mono;
+        }
+
+        pre {
+            @apply bg-gray-200 dark:bg-gray-700 p-4 rounded-lg overflow-x-auto my-3;
+
+            code {
+                @apply bg-transparent p-0;
+            }
+        }
+
+        ul, ol {
+            @apply pl-6 my-2;
+        }
+
+        ul {
+            list-style-type: disc;
+        }
+
+        ol {
+            list-style-type: decimal;
+        }
+
+        li {
+            @apply mb-1;
+        }
+
+        a {
+            @apply text-primary underline;
+        }
+
+        blockquote {
+            @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic my-3;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            @apply font-semibold mt-4 mb-2;
+        }
+
+        h1 { @apply text-xl; }
+        h2 { @apply text-lg; }
+        h3 { @apply text-base; }
+    }
+
+    // Stili per il bottone FAB di invio
+    .mat-mdc-fab {
+        &:not(:disabled) {
+            @apply shadow-lg;
+        }
+
+        &:disabled {
+            @apply opacity-50;
+        }
+    }
+
+    // Stili per la textarea
+    textarea {
+        &::placeholder {
+            @apply text-hint;
+        }
+    }
+
+    // Animazione per lo spinner nel messaggio AI
+    .mat-mdc-progress-spinner {
+        --mdc-circular-progress-active-indicator-color: var(--fuse-primary);
+    }
+
+    // Hover effect per i bottoni suggerimento
+    .mat-mdc-outlined-button {
+        @apply transition-all duration-200;
+
+        &:hover {
+            @apply bg-gray-100 dark:bg-gray-800;
+        }
+    }
+
+    // Stili per la sidebar su mobile
+    mat-drawer {
+        &.mat-drawer-over {
+            @apply shadow-2xl;
+        }
+    }
+
+    // Animazione fade-in per i nuovi messaggi
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .mb-6 {
+        animation: fadeIn 0.3s ease-out;
+    }
+    .app-icon64 {
+        width: 64px;
+        height: 64px;
+        background-image: url('/images/logo/logoSolo.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        }
+    .app-icon32 {
+        width: 32px;
+        height: 32px;
+        background-image: url('/images/logo/logoSolo.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        }
+}

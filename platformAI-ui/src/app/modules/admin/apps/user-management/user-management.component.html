@@ -1,0 +1,325 @@
+<ng-container *transloco="let t">
+<div class="user-management-container flex h-full w-full flex-col">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <div class="flex flex-shrink-0 flex-col border-b bg-card px-6 py-5 dark:bg-transparent">
+
+        <!-- Titolo + pulsante crea -->
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-semibold tracking-tight">{{ t('userManagement.title') }}</h2>
+                <p class="text-secondary mt-0.5 text-sm">
+                    {{ t('userManagement.subtitle') }}
+                </p>
+            </div>
+            <button mat-flat-button color="primary" (click)="openCreate()">
+                <mat-icon [svgIcon]="'heroicons_outline:user-plus'"></mat-icon>
+                <span class="ml-2">{{ t('userManagement.newUser') }}</span>
+            </button>
+        </div>
+
+        <!-- Stats -->
+        <div class="mt-5 grid grid-cols-3 gap-4 sm:grid-cols-3">
+            <div class="stat-card">
+                <div class="stat-icon bg-indigo-100 dark:bg-indigo-900">
+                    <mat-icon class="text-indigo-600" [svgIcon]="'heroicons_outline:users'"></mat-icon>
+                </div>
+                <div>
+                    <p class="stat-value">{{ totalUsers }}</p>
+                    <p class="stat-label">{{ t('userManagement.totalUsers') }}</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon bg-green-100 dark:bg-green-900">
+                    <mat-icon class="text-green-600" [svgIcon]="'heroicons_outline:check-circle'"></mat-icon>
+                </div>
+                <div>
+                    <p class="stat-value text-green-600">{{ activeUsers }}</p>
+                    <p class="stat-label">{{ t('userManagement.active') }}</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon bg-red-100 dark:bg-red-900">
+                    <mat-icon class="text-red-500" [svgIcon]="'heroicons_outline:x-circle'"></mat-icon>
+                </div>
+                <div>
+                    <p class="stat-value text-red-500">{{ inactiveUsers }}</p>
+                    <p class="stat-label">{{ t('userManagement.disabled') }}</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── Toolbar filtri ──────────────────────────────────────────────── -->
+    <div class="flex flex-shrink-0 flex-wrap items-center gap-3 border-b bg-card px-6 py-3 dark:bg-transparent">
+
+        <!-- Campo ricerca -->
+        <mat-form-field class="search-field" subscriptSizing="dynamic">
+            <mat-icon matPrefix [svgIcon]="'heroicons_outline:magnifying-glass'"></mat-icon>
+            <input
+                matInput
+                [placeholder]="t('userManagement.searchPlaceholder')"
+                [value]="searchValue"
+                (input)="onSearch($any($event.target).value)"
+            >
+            @if (searchValue) {
+                <button mat-icon-button matSuffix (click)="onSearch('')">
+                    <mat-icon [svgIcon]="'heroicons_outline:x-mark'"></mat-icon>
+                </button>
+            }
+        </mat-form-field>
+
+        <!-- Filtro ruolo -->
+        <mat-form-field class="role-filter-field" subscriptSizing="dynamic">
+            <mat-icon matPrefix [svgIcon]="'heroicons_outline:shield-check'"></mat-icon>
+            <mat-select
+                [placeholder]="t('userManagement.allRoles')"
+                [value]="roleFilter"
+                (selectionChange)="onRoleFilter($event.value)"
+            >
+                <mat-option value="">{{ t('userManagement.allRoles') }}</mat-option>
+                @for (role of roles; track role.id) {
+                    <mat-option [value]="role.id">{{ role.description || role.code }}</mat-option>
+                }
+            </mat-select>
+        </mat-form-field>
+
+        <!-- Bottone reset filtri -->
+        @if (searchValue || roleFilter) {
+            <button mat-stroked-button (click)="clearFilters()">
+                <mat-icon [svgIcon]="'heroicons_outline:funnel'"></mat-icon>
+                <span class="ml-1">{{ t('userManagement.resetFilters') }}</span>
+            </button>
+        }
+
+        <!-- Contatore risultati -->
+        <span class="text-hint ml-auto text-sm">
+            {{ dataSource.filteredData.length }} {{ t('userManagement.results') }}
+        </span>
+
+    </div>
+
+    <!-- ── Tabella ─────────────────────────────────────────────────────── -->
+    <div class="min-h-0 flex-auto overflow-auto">
+
+        <!-- Spinner di caricamento -->
+        @if (isLoading) {
+            <div class="flex h-64 items-center justify-center">
+                <mat-spinner diameter="40"></mat-spinner>
+            </div>
+        }
+
+        <!-- Tabella utenti -->
+        @if (!isLoading) {
+            <table
+                mat-table
+                [dataSource]="dataSource"
+                matSort
+                class="w-full"
+            >
+
+                <!-- ── Colonna avatar + nome ──────────────────────────── -->
+                <ng-container matColumnDef="avatar">
+                    <th mat-header-cell *matHeaderCellDef class="w-12"></th>
+                    <td mat-cell *matCellDef="let user">
+                        <div
+                            class="user-avatar"
+                            [ngClass]="user.enabled ? 'avatar-active' : 'avatar-inactive'"
+                        >
+                            {{ getInitials(user) }}
+                        </div>
+                    </td>
+                </ng-container>
+
+                <ng-container matColumnDef="name">
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ t('userManagement.colUser') }}</th>
+                    <td mat-cell *matCellDef="let user">
+                        <div class="flex flex-col">
+                            <span class="font-medium">{{ user.name }} {{ user.surname }}</span>
+                            <span class="text-hint text-xs">{{ user.login }}</span>
+                        </div>
+                    </td>
+                </ng-container>
+
+                <!-- ── Colonna email ─────────────────────────────────── -->
+                <ng-container matColumnDef="email">
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ t('userManagement.colEmail') }}</th>
+                    <td mat-cell *matCellDef="let user">
+                        <span class="text-sm">{{ user.email || '—' }}</span>
+                    </td>
+                </ng-container>
+
+                <!-- ── Colonna telefono ──────────────────────────────── -->
+                <ng-container matColumnDef="mobilePhone">
+                    <th mat-header-cell *matHeaderCellDef>{{ t('userManagement.colPhone') }}</th>
+                    <td mat-cell *matCellDef="let user">
+                        <span class="text-hint text-sm">{{ user.mobilePhone || '—' }}</span>
+                    </td>
+                </ng-container>
+
+                <!-- ── Colonna ruolo ─────────────────────────────────── -->
+                <ng-container matColumnDef="role">
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ t('userManagement.colRole') }}</th>
+                    <td mat-cell *matCellDef="let user">
+                        @if (user.role) {
+                            <span
+                                class="role-badge"
+                                [ngClass]="getRoleBadgeClass(user.role.code)"
+                            >
+                                {{ user.role.description || user.role.code }}
+                            </span>
+                        } @else {
+                            <span class="text-hint text-xs">—</span>
+                        }
+                    </td>
+                </ng-container>
+
+                <!-- ── Colonna tenant ────────────────────────────────── -->
+                <ng-container matColumnDef="tenant">
+                    <th mat-header-cell *matHeaderCellDef>{{ t('userManagement.colTenant') }}</th>
+                    <td mat-cell *matCellDef="let user">
+                        @if (user.tenant) {
+                            <div class="flex flex-col">
+                                <span class="text-sm font-medium">{{ user.tenant.name }}</span>
+                                <span class="text-hint text-xs">{{ user.tenant.code }}</span>
+                            </div>
+                        } @else {
+                            <span class="text-hint text-xs">—</span>
+                        }
+                    </td>
+                </ng-container>
+
+                <!-- ── Colonna stato ─────────────────────────────────── -->
+                <ng-container matColumnDef="status">
+                    <th mat-header-cell *matHeaderCellDef>{{ t('userManagement.colStatus') }}</th>
+                    <td mat-cell *matCellDef="let user">
+                        <div class="flex items-center gap-2">
+                            <mat-slide-toggle
+                                color="primary"
+                                [checked]="user.enabled"
+                                (change)="toggleEnabled(user)"
+                                [matTooltip]="user.enabled ? t('userManagement.clickToDisable') : t('userManagement.clickToEnable')"
+                            ></mat-slide-toggle>
+                            <span
+                                class="text-xs font-medium"
+                                [ngClass]="user.enabled
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-500 dark:text-red-400'"
+                            >
+                                {{ user.enabled ? t('userManagement.statusActive') : t('userManagement.statusDisabled') }}
+                            </span>
+                        </div>
+                    </td>
+                </ng-container>
+
+                <!-- ── Colonna azioni ────────────────────────────────── -->
+                <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef class="text-right">{{ t('userManagement.colActions') }}</th>
+                    <td mat-cell *matCellDef="let user" class="text-right">
+
+                        <!-- Bottone modifica -->
+                        <button
+                            mat-icon-button
+                            (click)="openEdit(user)"
+                            [matTooltip]="t('userManagement.editUser')"
+                        >
+                            <mat-icon
+                                class="icon-size-5"
+                                [svgIcon]="'heroicons_outline:pencil-square'"
+                            ></mat-icon>
+                        </button>
+
+                        <!-- Menu azioni aggiuntive -->
+                        <button
+                            mat-icon-button
+                            [matMenuTriggerFor]="userMenu"
+                            [matTooltip]="t('userManagement.moreActions')"
+                        >
+                            <mat-icon
+                                class="icon-size-5"
+                                [svgIcon]="'heroicons_outline:ellipsis-vertical'"
+                            ></mat-icon>
+                        </button>
+                        <mat-menu #userMenu="matMenu">
+                            <button mat-menu-item (click)="openEdit(user)">
+                                <mat-icon [svgIcon]="'heroicons_outline:pencil-square'"></mat-icon>
+                                <span>{{ t('userManagement.editUser') }}</span>
+                            </button>
+                            <button mat-menu-item (click)="toggleEnabled(user)">
+                                <mat-icon
+                                    [svgIcon]="user.enabled
+                                        ? 'heroicons_outline:x-circle'
+                                        : 'heroicons_outline:check-circle'"
+                                ></mat-icon>
+                                <span>{{ user.enabled ? t('userManagement.disableAccount') : t('userManagement.enableAccount') }}</span>
+                            </button>
+                            <mat-divider></mat-divider>
+                            <button
+                                mat-menu-item
+                                class="text-red-600 dark:text-red-400"
+                                (click)="deleteUser(user)"
+                            >
+                                <mat-icon
+                                    class="text-red-600 dark:text-red-400"
+                                    [svgIcon]="'heroicons_outline:trash'"
+                                ></mat-icon>
+                                <span>{{ t('userManagement.deleteUser') }}</span>
+                            </button>
+                        </mat-menu>
+
+                    </td>
+                </ng-container>
+
+                <!-- ── Header e righe ────────────────────────────────── -->
+                <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+                <tr
+                    mat-row
+                    *matRowDef="let user; columns: displayedColumns;"
+                    class="user-row"
+                    [ngClass]="{ 'row-disabled': !user.enabled }"
+                ></tr>
+
+                <!-- ── Empty state ───────────────────────────────────── -->
+                <tr class="mat-row" *matNoDataRow>
+                    <td class="mat-cell" [attr.colspan]="displayedColumns.length">
+                        <div class="flex flex-col items-center justify-center py-16 text-center">
+                            <mat-icon
+                                class="icon-size-16 text-hint mb-4"
+                                [svgIcon]="searchValue || roleFilter
+                                    ? 'heroicons_outline:magnifying-glass'
+                                    : 'heroicons_outline:users'"
+                            ></mat-icon>
+                            <p class="text-secondary font-medium">
+                                {{ searchValue || roleFilter
+                                    ? t('userManagement.noUsersFilter')
+                                    : t('userManagement.noUsersFound') }}
+                            </p>
+                            @if (searchValue || roleFilter) {
+                                <button mat-stroked-button class="mt-3" (click)="clearFilters()">
+                                    {{ t('userManagement.removeFilters') }}
+                                </button>
+                            } @else {
+                                <button mat-flat-button color="primary" class="mt-3" (click)="openCreate()">
+                                    {{ t('userManagement.createFirst') }}
+                                </button>
+                            }
+                        </div>
+                    </td>
+                </tr>
+
+            </table>
+        }
+    </div>
+
+    <!-- ── Paginatore ──────────────────────────────────────────────────── -->
+    <div class="flex-shrink-0 border-t bg-card px-4 dark:bg-transparent">
+        <mat-paginator
+            [pageSizeOptions]="[10, 25, 50, 100]"
+            [pageSize]="25"
+            showFirstLastButtons
+        ></mat-paginator>
+    </div>
+
+</div>
+</ng-container>

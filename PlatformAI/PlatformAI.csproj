@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.ML" Version="5.0.0" />
+    <!-- <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" /> -->
+     <PackageReference Include="NSwag.AspNetCore" Version="14.0.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.1" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../PlatformAI.Analytics/PlatformAI.Analytics.csproj" />
+    <ProjectReference Include="../PlatformAI.Core/PlatformAI.Core.csproj" />
+    <ProjectReference Include="../PlatformAI.Infrastructure/PlatformAI.Infrastructure.csproj" />
+    <ProjectReference Include="../PlatformAI.ML/PlatformAI.ML.csproj" />
+    <ProjectReference Include="../PlatformAI.NLP/PlatformAI.NLP.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,38 @@
+{
+    // ── UI shortcuts (invariati) ─────────────────────────────────
+    "appService.defaultWebAppToDeploy": "None",
+    "ShortcutMenuBar.commentLine": true,
+    "ShortcutMenuBar.navigateBack": false,
+    "ShortcutMenuBar.navigateForward": false,
+    "ShortcutMenuBar.openFilesList": false,
+
+    // ── C# / .NET language server ────────────────────────────────
+    // Forza il nuovo language server Roslyn (C# Dev Kit) invece di OmniSharp.
+    // Essenziale per net10.0: OmniSharp non supporta versioni preview di .NET
+    // e se è attivo non mostra errori in tempo reale nell'editor.
+    "dotnet.server.useOmnisharp": false,
+
+    // Indica il file .sln come punto di ingresso della soluzione.
+    // Senza questo VS Code potrebbe caricare solo il progetto aperto
+    // invece dell'intera soluzione con tutti i riferimenti.
+    "dotnet.defaultSolution": "PlatformAI.sln",
+
+    // Abilita l'analisi semantica completa (errori, warning, suggerimenti)
+    // direttamente nell'editor senza dover fare una build esplicita.
+    "editor.semanticHighlighting.enabled": true,
+    "csharp.semanticHighlighting.enabled": true,
+
+    // Background Analysis: il default "openFiles" analizza solo i file aperti.
+    // "fullSolution" analizza tutti i file della soluzione e mostra errori
+    // anche nei file non aperti — il pannello Problems diventa completo.
+    "dotnet.backgroundAnalysis.analyzerDiagnosticsScope": "fullSolution",
+    "dotnet.backgroundAnalysis.compilerDiagnosticsScope": "fullSolution",
+
+    // Disabilita notifiche ridondanti di restore NuGet
+    "csharp.suppressDotnetRestoreNotification": false,
+
+    // OmniSharp: se per qualche motivo si avviasse comunque,
+    // usare la versione moderna compatibile con .NET recenti
+    "omnisharp.useModernNet": true,
+    "omnisharp.enableEditorConfigSupport": false
+}

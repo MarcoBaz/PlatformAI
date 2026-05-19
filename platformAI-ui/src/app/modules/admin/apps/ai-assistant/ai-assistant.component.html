@@ -1,0 +1,378 @@
+<ng-container *transloco="let t">
+<div class="ai-assistant-container flex h-full w-full">
+    <mat-drawer-container class="h-full flex-auto" [hasBackdrop]="drawerMode === 'over'">
+        <!-- Sidebar con lista conversazioni -->
+        <mat-drawer
+            class="w-72 dark:bg-gray-900"
+            [autoFocus]="false"
+            [mode]="drawerMode"
+            [(opened)]="drawerOpened"
+        >
+            <div class="flex h-full flex-col">
+                <!-- Header sidebar -->
+                <div class="flex h-16 flex-shrink-0 items-center justify-between border-b px-4">
+                    <span class="text-lg font-semibold">{{ t('aiAssistant.conversations') }}</span>
+                    <button
+                        mat-icon-button
+                        (click)="newConversation()"
+                        [matTooltip]="t('aiAssistant.newConversation')"
+                    >
+                        <mat-icon [svgIcon]="'heroicons_outline:plus'"></mat-icon>
+                    </button>
+                </div>
+
+                <!-- Lista conversazioni — min-h-0 necessario: senza di esso flex-auto
+                     non si comprime e overflow-y-auto non scatta mai -->
+                <div class="min-h-0 flex-auto overflow-y-auto">
+                    @for (conversation of conversations; track trackByFn(i, conversation); let i = $index) {
+                        <div
+                            class="group flex cursor-pointer items-center gap-3 border-b px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            [ngClass]="{'bg-primary-50 dark:bg-primary-900': currentConversation?.id === conversation.id}"
+                            (click)="selectConversation(conversation.id)"
+                        >
+                            <mat-icon
+                                class="text-hint flex-shrink-0"
+                                [svgIcon]="'heroicons_outline:chat-bubble-left-right'"
+                            ></mat-icon>
+                            <div class="min-w-0 flex-auto">
+                                <div class="truncate text-sm font-medium">
+                                    {{ conversation.title }}
+                                </div>
+                                <div class="text-hint truncate text-xs">
+                                    {{ conversation.updatedAt | date:'short' }}
+                                </div>
+                            </div>
+                            <button
+                                mat-icon-button
+                                class="invisible flex-shrink-0 group-hover:visible"
+                                (click)="deleteConversation(conversation.id, $event)"
+                                [matTooltip]="t('aiAssistant.delete')"
+                            >
+                                <mat-icon
+                                    class="icon-size-4"
+                                    [svgIcon]="'heroicons_outline:trash'"
+                                ></mat-icon>
+                            </button>
+                        </div>
+                    }
+
+                    @if (conversations.length === 0) {
+                        <div class="flex flex-col items-center justify-center p-8 text-center">
+                            <mat-icon
+                                class="icon-size-12 text-hint mb-4"
+                                [svgIcon]="'heroicons_outline:chat-bubble-oval-left-ellipsis'"
+                            ></mat-icon>
+                            <p class="text-secondary">{{ t('aiAssistant.noConversations') }}</p>
+                            <p class="text-hint text-sm">{{ t('aiAssistant.startNewChat') }}</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </mat-drawer>
+
+        <!-- Contenuto principale -->
+        <mat-drawer-content>
+            <!-- Wrapper assoluto: riempie mat-drawer-content indipendentemente
+                 dall'ereditarietà di height. Angular Material già imposta
+                 position:relative su mat-drawer-content, quindi inset:0 funziona. -->
+            <div class="absolute inset-0 flex flex-col overflow-hidden">
+            <!-- Header principale -->
+            <div class="flex h-16 flex-shrink-0 items-center border-b bg-card px-4 dark:bg-transparent">
+                <!-- Toggle sidebar (mobile) -->
+                <button
+                    class="mr-4 lg:hidden"
+                    mat-icon-button
+                    (click)="toggleDrawer()"
+                >
+                    <mat-icon [svgIcon]="'heroicons_outline:bars-3'"></mat-icon>
+                </button>
+
+                <!-- Titolo  [svgIcon]="'heroicons_outline:sparkles'"-->
+                <div class="flex items-center gap-3" >
+                    <mat-icon
+                        class="app-icon32"
+                       
+                    ></mat-icon>
+                    <span class="text-lg font-semibold">{{ t('aiAssistant.title') }}</span>
+                    @if (isStreaming) {
+                        <span class="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">
+                            <span class="mr-1 h-2 w-2 animate-pulse rounded-full bg-green-500"></span>
+                            {{ t('aiAssistant.generating') }}
+                        </span>
+                    }
+                </div>
+
+                <!-- Menu azioni -->
+                <div class="ml-auto flex items-center gap-2">
+                    <button
+                        mat-icon-button
+                        [matMenuTriggerFor]="actionsMenu"
+                        [matTooltip]="t('aiAssistant.actions')"
+                    >
+                        <mat-icon [svgIcon]="'heroicons_outline:ellipsis-vertical'"></mat-icon>
+                    </button>
+                    <mat-menu #actionsMenu="matMenu">
+                        <button mat-menu-item (click)="clearConversation()">
+                            <mat-icon [svgIcon]="'heroicons_outline:trash'"></mat-icon>
+                            <span>{{ t('aiAssistant.clearConversation') }}</span>
+                        </button>
+                        <button mat-menu-item (click)="newConversation()">
+                            <mat-icon [svgIcon]="'heroicons_outline:plus'"></mat-icon>
+                            <span>{{ t('aiAssistant.newConversation') }}</span>
+                        </button>
+                    </mat-menu>
+                </div>
+            </div>
+
+            <!-- Area messaggi — min-h-0 obbligatorio: senza di esso flex-auto
+                 espande oltre il contenitore e overflow-y-auto non scatta mai -->
+            <div #messagesContainer
+                class="flex-1 overflow-y-auto bg-gray-50 dark:bg-transparent" style="min-height: 0; flex-shrink: 1;">
+                @if (currentConversation && currentConversation.messages.length > 0) {
+                    <div class="mx-auto max-w-4xl px-4 py-6">
+                        @for (message of currentConversation.messages; track trackByFn(i, message); let i = $index) {
+                            <div
+                                class="mb-6"
+                                [ngClass]="{'flex justify-end': message.isAnswer === false}"
+                            >
+                                <!-- Messaggio utente -->
+                                @if (message.isAnswer === false) {
+                                    <div class="max-w-3/4 lg:max-w-2/3">
+                                        <div class="rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-on-primary">
+                                            <p class="whitespace-pre-wrap">{{ message.content }}</p>
+                                        </div>
+                                        <div class="mt-1 text-right text-xs text-hint">
+                                            {{ message.lastModifiedDate | date:'HH:mm' }}
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Messaggio AI -->
+                                @if (message.isAnswer === true) {
+                                    <div class="flex gap-3">
+                                        <!-- Avatar AI -->
+                                        <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-200">
+                                            <mat-icon
+                                                class="app-icon32"
+                                            ></mat-icon>
+                                        </div>
+
+                                        <!-- Contenuto messaggio -->
+                                        <div class="max-w-3/4 lg:max-w-2/3">
+                                            @if (message.isLoading && !message.content) {
+                                                <!-- Loading iniziale -->
+                                                <div class="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-card px-4 py-3 shadow-sm dark:bg-gray-800">
+                                                    <mat-spinner diameter="20"></mat-spinner>
+                                                    <span class="text-secondary">{{ t('aiAssistant.thinking') }}</span>
+                                                </div>
+                                            } @else {
+                                                <!-- Contenuto (anche durante streaming) -->
+                                                <div class="rounded-2xl rounded-tl-sm bg-card px-4 py-3 shadow-sm dark:bg-gray-800">
+                                                    <div class="ai-message-content whitespace-pre-wrap" [innerHTML]="message.content"></div>
+                                                    <!-- Cursore lampeggiante durante streaming -->
+                                                    @if (isStreaming && i === currentConversation.messages.length - 1 && message.isAnswer) {
+                                                        <span class="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary"></span>
+                                                    }
+                                                </div>
+
+                                                <!-- Grafici generati dal tool get_production_data -->
+                                                @if (message.charts && message.charts.length > 0) {
+                                                    <div class="mt-3 space-y-4">
+                                                        @for (chart of message.charts; track chart.id) {
+                                                            <div class="rounded-xl border bg-white p-4 shadow-sm dark:bg-gray-900">
+                                                                <p class="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                                    {{ chart.title }}
+                                                                </p>
+                                                                @if (chart.subtitle) {
+                                                                    <p class="mb-2 text-xs text-gray-500">{{ chart.subtitle }}</p>
+                                                                }
+                                                                @let opts = getChartOptions(chart);
+                                                                <apx-chart
+                                                                    [toolbar]="{ show: true, tools: { download: true, selection: true, zoom: true, pan: true, reset: true } }"
+                                                                    [series]="opts.series"
+                                                                    [chart]="opts.chart"
+                                                                    [xaxis]="opts.xaxis"
+                                                                    [labels]="opts.labels"
+                                                                    [colors]="opts.colors"
+                                                                    [stroke]="opts.stroke"
+                                                                    [fill]="opts.fill"
+                                                                    [legend]="opts.legend"
+                                                                    [dataLabels]="opts.dataLabels"
+                                                                    [tooltip]="opts.tooltip"
+                                                                    [grid]="opts.grid"
+                                                                ></apx-chart>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+
+                                                <!-- Card predizione ML -->
+                                                @if (message.prediction) {
+                                                    <div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-950">
+                                                        <div class="mb-2 flex items-center gap-2">
+                                                            <mat-icon class="icon-size-4 text-indigo-600" [svgIcon]="'heroicons_outline:sparkles'"></mat-icon>
+                                                            <span class="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{{ t('aiAssistant.mlPrediction') }}</span>
+                                                            @if (message.prediction.confidence != null) {
+                                                                <span class="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                                                                    {{ t('aiAssistant.confidence', { value: (message.prediction.confidence * 100).toFixed(0) }) }}
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                        <p class="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
+                                                            {{ message.prediction.predictedValue?.toFixed(0) }}
+                                                            <span class="text-sm font-normal text-indigo-600">{{ t('aiAssistant.predictedUnits') }}</span>
+                                                        </p>
+                                                        @if (message.prediction.modelRSquared != null) {
+                                                            <div class="mt-2 flex gap-4 text-xs text-indigo-600 dark:text-indigo-400">
+                                                                <span>R² {{ message.prediction.modelRSquared?.toFixed(3) }}</span>
+                                                                @if (message.prediction.modelRMSE != null) {
+                                                                    <span>RMSE ±{{ message.prediction.modelRMSE?.toFixed(1) }}</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        @if (message.prediction.explanation) {
+                                                            <p class="mt-2 text-xs text-indigo-700 dark:text-indigo-400">
+                                                                {{ message.prediction.explanation }}
+                                                            </p>
+                                                        }
+                                                    </div>
+                                                }
+                                                @if (!isStreaming || i !== currentConversation.messages.length - 1) {
+                                                    <div class="mt-1 text-xs text-hint">
+                                                        {{ message.lastModifiedDate | date:'HH:mm' }}
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                } @else {
+                    <!-- Empty state [svgIcon]="'heroicons_outline:sparkles'" -->
+                    <div class="flex h-full flex-col items-center justify-center p-8">
+                        <div class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900">
+                            <mat-icon
+                                class="app-icon64"
+                                
+                            ></mat-icon>
+                        </div>
+                        <h2 class="mb-2 text-2xl font-semibold">{{ t('aiAssistant.howCanIHelp') }}</h2>
+                        <p class="text-secondary mb-8 max-w-md text-center">
+                            {{ t('aiAssistant.assistantDescription') }}
+                        </p>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <button
+                                mat-stroked-button
+                                class="justify-start px-4 py-6"
+                                (click)="messageText = t('aiAssistant.explainConcept') + '...'; sendMessage()"
+                            >
+                                <mat-icon
+                                    class="mr-3 text-hint"
+                                    [svgIcon]="'heroicons_outline:light-bulb'"
+                                ></mat-icon>
+                                <span class="text-left">{{ t('aiAssistant.explainConcept') }}</span>
+                            </button>
+                            <button
+                                mat-stroked-button
+                                class="justify-start px-4 py-6"
+                                (click)="messageText = t('aiAssistant.helpMeWrite') + '...'; sendMessage()"
+                            >
+                                <mat-icon
+                                    class="mr-3 text-hint"
+                                    [svgIcon]="'heroicons_outline:pencil-square'"
+                                ></mat-icon>
+                                <span class="text-left">{{ t('aiAssistant.helpMeWrite') }}</span>
+                            </button>
+                            <button
+                                mat-stroked-button
+                                class="justify-start px-4 py-6"
+                                (click)="messageText = t('aiAssistant.analyzeData') + '...'; sendMessage()"
+                            >
+                                <mat-icon
+                                    class="mr-3 text-hint"
+                                    [svgIcon]="'heroicons_outline:chart-bar'"
+                                ></mat-icon>
+                                <span class="text-left">{{ t('aiAssistant.analyzeData') }}</span>
+                            </button>
+                            <button
+                                mat-stroked-button
+                                class="justify-start px-4 py-6"
+                                (click)="messageText = t('aiAssistant.solveProblem') + '...'; sendMessage()"
+                            >
+                                <mat-icon
+                                    class="mr-3 text-hint"
+                                    [svgIcon]="'heroicons_outline:wrench-screwdriver'"
+                                ></mat-icon>
+                                <span class="text-left">{{ t('aiAssistant.solveProblem') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                }
+                <!-- Anchor per scroll-to-bottom — scrollIntoView è più affidabile
+                     di scrollTop = scrollHeight con OnPush + flex layout -->
+                <div #scrollAnchor></div>
+            </div>
+
+            <!-- Input area — flex-shrink-0 impedisce che venga compresso dai messaggi -->
+            <div class="flex-shrink-0 border-t bg-card p-4 dark:bg-transparent">
+                <div class="mx-auto max-w-4xl">
+                    <div class="flex items-end gap-3 rounded-2xl border bg-card p-2 shadow-sm dark:bg-gray-800">
+                        <!-- Textarea -->
+                        <textarea
+                            #messageInput
+                            class="max-h-32 min-h-[44px] flex-auto resize-none border-0 bg-transparent px-3 py-2 text-base focus:outline-none focus:ring-0"
+                            [(ngModel)]="messageText"
+                            (keydown)="onKeyDown($event)"
+                            [placeholder]="t('aiAssistant.typeMessage')"
+                            rows="1"
+                            [disabled]="isStreaming"
+                            cdkTextareaAutosize
+                            cdkAutosizeMinRows="1"
+                            cdkAutosizeMaxRows="4"
+                        ></textarea>
+
+                        <!-- Send/Stop button -->
+                        @if (isStreaming) {
+                            <!-- Pulsante Stop durante streaming -->
+                            <button
+                                mat-fab
+                                color="warn"
+                                class="flex-shrink-0"
+                                (click)="stopStreaming()"
+                                [matTooltip]="t('aiAssistant.stopGeneration')"
+                            >
+                                <mat-icon [svgIcon]="'heroicons_outline:stop'"></mat-icon>
+                            </button>
+                        } @else {
+                            <!-- Pulsante Send -->
+                            <button
+                                mat-fab
+                                color="primary"
+                                class="flex-shrink-0"
+                                [disabled]="!messageText.trim() || isLoading"
+                                (click)="sendMessage()"
+                            >
+                                @if (isLoading) {
+                                    <mat-spinner diameter="24" class="text-on-primary"></mat-spinner>
+                                } @else {
+                                    <mat-icon [svgIcon]="'heroicons_outline:paper-airplane'"></mat-icon>
+                                }
+                            </button>
+                        }
+                    </div>
+                    <p class="mt-2 text-center text-xs text-hint">
+                        @if (isStreaming) {
+                            {{ t('aiAssistant.clickStopHint') }}
+                        } @else {
+                            {{ t('aiAssistant.pressEnterHint') }}
+                        }
+                    </p>
+                </div>
+            </div>
+            </div><!-- /flex-col wrapper -->
+        </mat-drawer-content>
+    </mat-drawer-container>
+</div>
+</ng-container>

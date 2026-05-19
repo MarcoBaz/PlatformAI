@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    // C# Dev Kit: il language server moderno con Roslyn, supporta net10.0
+    // Sostituisce la vecchia estensione OmniSharp (ms-dotnettools.csharp)
+    "ms-dotnettools.csdevkit",
+
+    // Incluso automaticamente da csdevkit, ma esplicito per chiarezza
+    "ms-dotnettools.csharp",
+
+    // Azure Functions support
+    "ms-azuretools.vscode-azurefunctions"
+  ]
+}

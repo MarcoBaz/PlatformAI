@@ -1,0 +1,80 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        // ── Build tasks (usati dal debug launcher) ───────────────────
+        {
+            "label": "Debug",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/PlatformAI/PlatformAI.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Release",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/PlatformAI/PlatformAI.csproj",
+                "-c",
+                "Release"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/PlatformAI.sln",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "publish",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/PlatformAI.sln",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+
+        // ── Watch Build — rileva errori in tempo reale ───────────────
+        // Esegui con: Ctrl+Shift+P → "Tasks: Run Task" → "watch build"
+        // Rimane attivo in background: ad ogni salvataggio ricompila
+        // e popola il pannello Problems con gli errori reali.
+        // Molto più affidabile del language server per questo setup.
+        {
+            "label": "watch build",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "watch",
+                "--project",
+                "${workspaceFolder}/PlatformAI/PlatformAI.csproj",
+                "build",
+                "/property:GenerateFullPaths=true"
+            ],
+            "problemMatcher": "$msCompile",
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "label": "Watch Build"
+            },
+            "runOptions": {
+                "runOn": "default"
+            }
+        }
+    ]
+}

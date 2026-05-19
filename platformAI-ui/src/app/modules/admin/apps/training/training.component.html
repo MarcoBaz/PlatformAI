@@ -1,0 +1,576 @@
+<ng-container *transloco="let t">
+<div class="flex flex-col flex-auto min-w-0">
+
+    <!-- Header ─────────────────────────────────────────────────────────────── -->
+    <div class="flex flex-col sm:flex-row flex-0 sm:items-center sm:justify-between p-6 sm:py-8 sm:px-10 border-b bg-card dark:bg-transparent">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3">
+                <mat-icon class="text-blue-600 icon-size-8" svgIcon="heroicons_outline:cpu-chip"></mat-icon>
+                <div>
+                    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight leading-7 sm:leading-10 truncate">
+                        {{ t('training.title') }}
+                    </h2>
+                    <p class="text-secondary mt-1">{{ t('training.subtitle') }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Checkpoint badge ─────────────────────────────────────────────── -->
+        <div *ngIf="checkpoint" class="mt-4 sm:mt-0 sm:ml-4">
+            <div class="flex flex-col items-end gap-1 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <span class="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wider">{{ t('training.lastTraining') }}</span>
+                <span class="text-sm text-blue-800 dark:text-blue-200 font-mono">{{ checkpoint.lastTrainingDate | date:'dd/MM/yyyy HH:mm' }}</span>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-xs text-blue-600">R²</span>
+                    <span class="text-sm font-bold text-blue-800">{{ checkpoint.rSquared | number:'1.3-3' }}</span>
+                    <span class="text-xs text-blue-600">RMSE</span>
+                    <span class="text-sm font-bold text-blue-800">{{ checkpoint.rmse | number:'1.1-1' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content ─────────────────────────────────────────────────────────────── -->
+    <div class="flex-auto p-6 sm:p-10">
+        <div class="flex flex-col lg:flex-row gap-8">
+
+            <!-- ══ COLONNA SINISTRA: Form ══════════════════════════════════════ -->
+            <div class="flex flex-col gap-6 w-full lg:w-1/2">
+
+                <form [formGroup]="form" (ngSubmit)="runTraining()">
+
+                    <!-- Modalità ─────────────────────────────────────────────── -->
+                    <mat-card class="mat-elevation-z2">
+                        <mat-card-header>
+                            <mat-icon mat-card-avatar svgIcon="heroicons_outline:play-circle" class="text-blue-500"></mat-icon>
+                            <mat-card-title>{{ t('training.cardMode') }}</mat-card-title>
+                        </mat-card-header>
+                        <mat-card-content class="pt-4">
+                            <mat-slide-toggle formControlName="forceFullTraining" color="warn">
+                                <span class="ml-2">
+                                    <span class="font-medium">{{ t('training.forceFullLabel') }}</span>
+                                    <span class="text-secondary text-sm block">{{ t('training.forceFullHint') }}</span>
+                                </span>
+                            </mat-slide-toggle>
+                        </mat-card-content>
+                    </mat-card>
+
+                    <!-- Dati ─────────────────────────────────────────────────── -->
+                    <mat-card class="mat-elevation-z2">
+                        <mat-card-header>
+                            <mat-icon mat-card-avatar svgIcon="heroicons_outline:circle-stack" class="text-green-500"></mat-icon>
+                            <mat-card-title>{{ t('training.cardData') }}</mat-card-title>
+                        </mat-card-header>
+                        <mat-card-content class="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Min Data Points</mat-label>
+                                <input matInput type="number" formControlName="minDataPoints" min="10">
+                                <mat-hint>{{ t('training.hintMinDataPoints') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Historical Context Days</mat-label>
+                                <input matInput type="number" formControlName="historicalContextDays" min="1" max="365">
+                                <mat-hint>{{ t('training.hintHistoricalDays') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Max Historical Records</mat-label>
+                                <input matInput type="number" formControlName="maxHistoricalRecords" min="50">
+                                <mat-hint>{{ t('training.hintMaxHistorical') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Historical Sampling Ratio</mat-label>
+                                <input matInput type="number" formControlName="historicalSamplingRatio" min="0.1" max="1" step="0.1">
+                                <mat-hint>{{ t('training.hintSamplingRatio') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Test Fraction</mat-label>
+                                <input matInput type="number" formControlName="testFraction" min="0.1" max="0.4" step="0.05">
+                                <mat-hint>{{ t('training.hintTestFraction') }}</mat-hint>
+                            </mat-form-field>
+
+                            <div class="flex items-center col-span-full">
+                                <mat-slide-toggle formControlName="includeHistoricalContext" color="primary">
+                                    <span class="ml-2 text-sm">{{ t('training.includeHistorical') }}</span>
+                                </mat-slide-toggle>
+                            </div>
+
+                        </mat-card-content>
+                    </mat-card>
+
+                    <!-- Algoritmo ────────────────────────────────────────────── -->
+                    <mat-expansion-panel class="mat-elevation-z2">
+                        <mat-expansion-panel-header>
+                            <mat-panel-title class="flex items-center gap-2">
+                                <mat-icon svgIcon="heroicons_outline:cog-6-tooth" class="text-purple-500 icon-size-5"></mat-icon>
+                                {{ t('training.cardAlgo') }}
+                            </mat-panel-title>
+                            <mat-panel-description>FastTree / SDCA</mat-panel-description>
+                        </mat-expansion-panel-header>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+
+                            <mat-form-field appearance="outline" class="col-span-full">
+                                <mat-label>{{ t('training.labelAlgorithm') }}</mat-label>
+                                <mat-select formControlName="trainer">
+                                    <mat-option value="FastTree">{{ t('training.optionFastTree') }}</mat-option>
+                                    <mat-option value="Sdca">{{ t('training.optionSdca') }}</mat-option>
+                                </mat-select>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Number of Trees</mat-label>
+                                <input matInput type="number" formControlName="numberOfTrees" min="10" max="500">
+                                <mat-hint>{{ t('training.hintTrees') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Number of Leaves</mat-label>
+                                <input matInput type="number" formControlName="numberOfLeaves" min="5" max="200">
+                                <mat-hint>{{ t('training.hintLeaves') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Min Examples per Leaf</mat-label>
+                                <input matInput type="number" formControlName="minimumExampleCountPerLeaf" min="1" max="50">
+                                <mat-hint>{{ t('training.hintMinExamples') }}</mat-hint>
+                            </mat-form-field>
+
+                            <mat-form-field appearance="outline">
+                                <mat-label>Learning Rate</mat-label>
+                                <input matInput type="number" formControlName="learningRate" min="0.001" max="1" step="0.01">
+                                <mat-hint>{{ t('training.hintLearningRate') }}</mat-hint>
+                            </mat-form-field>
+
+                        </div>
+                    </mat-expansion-panel>
+
+                    <!-- Profili rapidi ───────────────────────────────────────── -->
+                    <div class="flex flex-wrap gap-2 items-center" style="margin-top: 1rem; margin-bottom: 1rem;">
+                        <span class="text-sm text-secondary">{{ t('training.quickProfiles') }}</span>
+                        <button type="button" mat-stroked-button (click)="form.patchValue({numberOfTrees:80, numberOfLeaves:20, minimumExampleCountPerLeaf:10, learningRate:0.05})">
+                            {{ t('training.profileConservative') }}
+                        </button>
+                        <button type="button" mat-stroked-button (click)="resetForm()">
+                            {{ t('training.profileDefault') }}
+                        </button>
+                        <button type="button" mat-stroked-button (click)="form.patchValue({numberOfTrees:200, numberOfLeaves:60, minimumExampleCountPerLeaf:3, learningRate:0.1})">
+                            {{ t('training.profileAggressive') }}
+                        </button>
+                        <span class="flex-1"></span>
+                        <button type="button" mat-icon-button
+                                [matTooltip]="t('training.tooltipResetCheckpoint')"
+                                (click)="resetCheckpoint()">
+                            <mat-icon svgIcon="heroicons_outline:arrow-path" class="text-orange-500"></mat-icon>
+                        </button>
+                    </div>
+
+                    <!-- Submit ───────────────────────────────────────────────── -->
+                    <button
+                        mat-flat-button
+                        type="submit"
+                        color="primary"
+                        class="w-full h-12 text-base font-semibold"
+                        [disabled]="form.invalid || isRunning">
+                        <div class="flex items-center justify-center gap-3">
+                            <mat-spinner *ngIf="isRunning" diameter="20"></mat-spinner>
+                            <mat-icon *ngIf="!isRunning" svgIcon="heroicons_outline:play-circle"></mat-icon>
+                            <span>{{ isRunning ? t('training.btnRunning') : t('training.btnStartTraining') }}</span>
+                        </div>
+                    </button>
+
+                <!-- Seed dati simulazione ────────────────────────────────────── -->
+                <mat-divider></mat-divider>
+                <div class="flex flex-col gap-2">
+                    <p class="text-sm text-secondary">
+                        <mat-icon svgIcon="heroicons_outline:beaker" class="icon-size-4 align-middle mr-1 text-purple-500"></mat-icon>
+                        <strong>{{ t('training.btnSeed') }}:</strong> {{ t('training.simDescription') }}
+                    </p>
+                    <button
+                        type="button"
+                        mat-stroked-button
+                        class="w-full h-11"
+                        [disabled]="isSeeding"
+                        (click)="seedData()">
+                        <div class="flex items-center justify-center gap-2">
+                            <mat-spinner *ngIf="isSeeding" diameter="18"></mat-spinner>
+                            <mat-icon *ngIf="!isSeeding" svgIcon="heroicons_outline:circle-stack" class="text-purple-500"></mat-icon>
+                            <span class="text-purple-700 dark:text-purple-300">
+                                {{ isSeeding ? t('training.btnSeeding') : t('training.btnSeed') }}
+                            </span>
+                        </div>
+                    </button>
+                </div>
+
+                </form>
+            </div>
+
+            <!-- ══ COLONNA DESTRA: Risultati ═══════════════════════════════════ -->
+            <div class="flex flex-col gap-6 w-full lg:w-1/2">
+
+                <!-- Stato iniziale ───────────────────────────────────────────── -->
+                <ng-container *ngIf="!result && !isRunning && !errorMessage">
+                    <div class="flex flex-col items-center justify-center h-64 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600">
+                        <mat-icon svgIcon="heroicons_outline:cpu-chip" class="icon-size-16 text-gray-300 dark:text-gray-600"></mat-icon>
+                        <p class="mt-4 text-secondary text-lg">{{ t('training.emptyTitle') }}</p>
+                        <p class="text-secondary text-sm">{{ t('training.emptySubtitle') }}</p>
+                    </div>
+                </ng-container>
+
+                <!-- Loading ──────────────────────────────────────────────────── -->
+                <ng-container *ngIf="isRunning">
+                    <div class="flex flex-col items-center justify-center h-64 rounded-2xl border-2 border-blue-200 bg-blue-50 dark:bg-blue-900/10">
+                        <mat-spinner diameter="56" color="primary"></mat-spinner>
+                        <p class="mt-6 text-blue-700 dark:text-blue-300 font-semibold text-lg">{{ t('training.runningTitle') }}</p>
+                        <p class="text-blue-500 text-sm mt-1">{{ t('training.runningSubtitle') }}</p>
+                    </div>
+                </ng-container>
+
+                <!-- Errore ───────────────────────────────────────────────────── -->
+                <ng-container *ngIf="errorMessage">
+                    <div class="flex items-start gap-4 p-5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <mat-icon svgIcon="heroicons_outline:x-circle" class="text-red-500 mt-0.5 flex-shrink-0"></mat-icon>
+                        <div>
+                            <p class="font-semibold text-red-700 dark:text-red-300">{{ t('training.errorTitle') }}</p>
+                            <p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ errorMessage }}</p>
+                        </div>
+                    </div>
+                </ng-container>
+
+                <!-- Risultato ────────────────────────────────────────────────── -->
+                <ng-container *ngIf="result">
+
+                    <!-- Header esito ──────────────────────────────────────────── -->
+                    <div class="flex items-center gap-4 p-5 rounded-xl"
+                         [ngClass]="result.success ? 'bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800'">
+                        <mat-icon [svgIcon]="result.success ? 'heroicons_outline:check-circle' : 'heroicons_outline:x-circle'"
+                                  class="icon-size-8 flex-shrink-0"
+                                  [ngClass]="result.success ? 'text-green-500' : 'text-red-500'">
+                        </mat-icon>
+                        <div class="flex-1">
+                            <p class="font-bold text-lg" [ngClass]="result.success ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
+                                {{ result.success ? t('training.resultSuccess') : t('training.resultFailed') }}
+                            </p>
+                            <p class="text-sm mt-0.5" [ngClass]="result.success ? 'text-green-600' : 'text-red-600'">
+                                {{ result.message }}
+                            </p>
+                        </div>
+                        <span class="text-sm font-mono text-secondary">{{ formatDuration(result.duration) }}</span>
+                    </div>
+
+                    <!-- Diagnosi ─────────────────────────────────────────────── -->
+                    <div *ngIf="result.success" class="flex items-center gap-3 px-4 py-3 rounded-lg" [ngClass]="diagnosisClass">
+                        <mat-icon [svgIcon]="diagnosisIcon" class="icon-size-5 flex-shrink-0"></mat-icon>
+                        <span class="font-semibold">{{ diagnosisLabel }}</span>
+                    </div>
+
+                    <!-- R² gauge ────────────────────────────────────────────── -->
+                    <mat-card *ngIf="result.success" class="mat-elevation-z2">
+                        <mat-card-header>
+                            <mat-card-title>{{ t('training.cardR2Title') }}</mat-card-title>
+                            <mat-card-subtitle>{{ t('training.cardR2Subtitle') }}</mat-card-subtitle>
+                        </mat-card-header>
+                        <mat-card-content class="pt-2">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-1">
+                                    <mat-progress-bar
+                                        mode="determinate"
+                                        [value]="r2Percent"
+                                        [color]="r2Color"
+                                        class="h-3 rounded-full">
+                                    </mat-progress-bar>
+                                </div>
+                                <span class="text-2xl font-bold tabular-nums w-16 text-right"
+                                      [ngClass]="{
+                                        'text-green-600': result.rSquared >= 0.8,
+                                        'text-yellow-600': result.rSquared >= 0.6 && result.rSquared < 0.8,
+                                        'text-red-600': result.rSquared < 0.6
+                                      }">
+                                    {{ result.rSquared | number:'1.3-3' }}
+                                </span>
+                            </div>
+                        </mat-card-content>
+                    </mat-card>
+
+                    <!-- Metriche ─────────────────────────────────────────────── -->
+                    <mat-card *ngIf="result.success" class="mat-elevation-z2">
+                        <mat-card-header>
+                            <mat-card-title>{{ t('training.cardMetrics') }}</mat-card-title>
+                        </mat-card-header>
+                        <mat-card-content>
+                            <div class="grid grid-cols-3 gap-4 pt-2">
+
+                                <div class="flex flex-col items-center p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                    <span class="text-xs font-semibold text-secondary uppercase tracking-wider">R²</span>
+                                    <span class="text-2xl font-bold mt-1 tabular-nums">{{ result.rSquared | number:'1.3-3' }}</span>
+                                    <span class="text-xs text-secondary mt-0.5">{{ t('training.metricVariance') }}</span>
+                                </div>
+
+                                <div class="flex flex-col items-center p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                    <span class="text-xs font-semibold text-secondary uppercase tracking-wider">RMSE</span>
+                                    <span class="text-2xl font-bold mt-1 tabular-nums">{{ result.rmse | number:'1.1-1' }}</span>
+                                    <span class="text-xs text-secondary mt-0.5">{{ t('training.metricPieces') }}</span>
+                                </div>
+
+                                <div class="flex flex-col items-center p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                    <span class="text-xs font-semibold text-secondary uppercase tracking-wider">MAE</span>
+                                    <span class="text-2xl font-bold mt-1 tabular-nums">{{ result.mae | number:'1.1-1' }}</span>
+                                    <span class="text-xs text-secondary mt-0.5">{{ t('training.metricMeanError') }}</span>
+                                </div>
+
+                            </div>
+                        </mat-card-content>
+                    </mat-card>
+
+                    <!-- Dataset & checkpoint ─────────────────────────────────── -->
+                    <mat-card *ngIf="result.success" class="mat-elevation-z2">
+                        <mat-card-header>
+                            <mat-card-title>{{ t('training.cardDataset') }}</mat-card-title>
+                        </mat-card-header>
+                        <mat-card-content>
+                            <div class="divide-y dark:divide-gray-700">
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.rowNewRecords') }}</span>
+                                    <span class="font-semibold tabular-nums">{{ result.newRecordsCount }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.rowTotalUsed') }}</span>
+                                    <span class="font-semibold tabular-nums">{{ result.totalDataUsed }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.rowModelVersion') }}</span>
+                                    <span class="font-mono text-sm">{{ result.modelVersion ?? '—' }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.rowPrevCheckpoint') }}</span>
+                                    <span class="font-mono text-sm">{{ (result.previousCheckpoint | date:'dd/MM HH:mm') ?? t('training.rowNone') }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.rowNewCheckpoint') }}</span>
+                                    <span class="font-mono text-sm font-semibold text-blue-600">{{ (result.newCheckpoint | date:'dd/MM HH:mm') ?? '—' }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.rowDuration') }}</span>
+                                    <span class="font-semibold">{{ formatDuration(result.duration) }}</span>
+                                </div>
+
+                            </div>
+                        </mat-card-content>
+                    </mat-card>
+
+                </ng-container>
+
+                <!-- ── Risultato Seed ─────────────────────────────────────── -->
+                <ng-container *ngIf="seedResult || seedError || isSeeding">
+
+                    <!-- Errore seed -->
+                    <div *ngIf="seedError" class="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <mat-icon svgIcon="heroicons_outline:exclamation-circle" class="text-red-500 shrink-0 mt-0.5"></mat-icon>
+                        <p class="text-sm text-red-700 dark:text-red-300">{{ seedError }}</p>
+                    </div>
+
+                    <!-- Seed in corso -->
+                    <div *ngIf="isSeeding" class="flex items-center gap-3 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200">
+                        <mat-spinner diameter="20" class="text-purple-500"></mat-spinner>
+                        <span class="text-sm text-purple-700 dark:text-purple-300">{{ t('training.btnSeeding') }}</span>
+                    </div>
+
+                    <!-- Seed completato -->
+                    <mat-card *ngIf="seedResult?.success" class="rounded-2xl shadow-sm border border-purple-200 dark:border-purple-800">
+                        <mat-card-header class="pb-0">
+                            <mat-card-title class="flex items-center gap-2 text-base">
+                                <mat-icon svgIcon="heroicons_outline:check-circle" class="text-purple-500"></mat-icon>
+                                {{ t('training.seedSuccess') }}
+                            </mat-card-title>
+                        </mat-card-header>
+                        <mat-card-content class="pt-4">
+                            <div class="divide-y divide-gray-100 dark:divide-gray-700">
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.seedOrder') }}</span>
+                                    <span class="font-mono font-semibold text-purple-600">{{ seedResult!.orderNumber }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.seedLine') }}</span>
+                                    <span class="font-semibold">{{ seedResult!.lineName }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.seedMachines') }}</span>
+                                    <span class="font-semibold tabular-nums">{{ seedResult!.machinesCount }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.seedProdData') }}</span>
+                                    <span class="font-semibold tabular-nums text-purple-600">{{ seedResult!.productionDataCount }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.seedEvents') }}</span>
+                                    <span class="font-semibold tabular-nums">{{ seedResult!.machineEventsCount }}</span>
+                                </div>
+
+                                <div class="flex justify-between items-center py-2.5">
+                                    <span class="text-secondary text-sm">{{ t('training.seedPeriod') }}</span>
+                                    <span class="font-mono text-xs text-secondary">{{ seedResult!.period }}</span>
+                                </div>
+
+                            </div>
+                            <p class="mt-3 text-xs text-secondary">{{ t('training.seedHint') }}</p>
+                        </mat-card-content>
+                    </mat-card>
+
+                </ng-container>
+
+            </div>
+
+        </div>
+
+        <!-- ══ LEGENDA PARAMETRI ═══════════════════════════════════════════════ -->
+        <div class="px-6 sm:px-10 pb-10">
+            <mat-expansion-panel class="rounded-2xl shadow-none border border-gray-200 dark:border-gray-700 mt-4">
+                <mat-expansion-panel-header>
+                    <mat-panel-title class="flex items-center gap-2 text-sm font-semibold text-secondary">
+                        <mat-icon svgIcon="heroicons_outline:book-open" class="icon-size-5"></mat-icon>
+                        {{ t('training.legendTitle') }}
+                    </mat-panel-title>
+                </mat-expansion-panel-header>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 pt-2 pb-4">
+
+                    <!-- ── Sezione Dati ────────────────────────────────────── -->
+                    <div class="md:col-span-2 mt-4 mb-1">
+                        <span class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">{{ t('training.legendDataSection') }}</span>
+                        <mat-divider class="mt-1"></mat-divider>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendFullTrainingTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendFullTrainingDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendMinDataTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendMinDataDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendContextTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendContextDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendDaysTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendDaysDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendMaxRecordsTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendMaxRecordsDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendSamplingTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendSamplingDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendTestFractionTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendTestFractionDesc') }}</p>
+                    </div>
+
+                    <!-- ── Sezione Algoritmo ───────────────────────────────── -->
+                    <div class="md:col-span-2 mt-6 mb-1">
+                        <span class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">{{ t('training.legendAlgoSection') }}</span>
+                        <mat-divider class="mt-1"></mat-divider>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendTrainerTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendTrainerDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendTreesTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendTreesDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendLeavesTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendLeavesDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendMinExamplesTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendMinExamplesDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendLearningRateTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendLearningRateDesc') }}</p>
+                    </div>
+
+                    <!-- ── Sezione Risultati ───────────────────────────────── -->
+                    <div class="md:col-span-2 mt-6 mb-1">
+                        <span class="text-xs font-bold uppercase tracking-widest text-green-600 dark:text-green-400">{{ t('training.legendResultsSection') }}</span>
+                        <mat-divider class="mt-1"></mat-divider>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendR2Title') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendR2Desc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendRmseTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendRmseDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendMaeTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendMaeDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendDiagnosisTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendDiagnosisDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendNewRecordsTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendNewRecordsDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendModelVersionTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendModelVersionDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendCheckpointTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendCheckpointDesc') }}</p>
+                    </div>
+
+                    <div class="py-2">
+                        <p class="text-sm font-semibold">{{ t('training.legendDurationTitle') }}</p>
+                        <p class="text-xs text-secondary mt-0.5">{{ t('training.legendDurationDesc') }}</p>
+                    </div>
+
+                </div>
+            </mat-expansion-panel>
+        </div>
+
+    </div>
+</div>
+</ng-container>

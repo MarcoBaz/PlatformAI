@@ -1,0 +1,6 @@
+@PlatFormAI_HostAddress = http://localhost:5055
+
+GET {{PlatFormAI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

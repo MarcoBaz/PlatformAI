@@ -1,0 +1,51 @@
+{
+    // Usare IntelliSense per informazioni sui possibili attributi.
+    // Al passaggio del mouse vengono visualizzate le descrizioni degli attributi esistenti.
+    // Per altre informazioni, visitare: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+      {
+            "name": "C#: PlatformAI Debug",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Debug",
+            "program": "${workspaceFolder}/PlatformAI/bin/Debug/net10.0/PlatformAI.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/PlatformAI",
+            "stopAtEntry": false,
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            }
+        },
+        {
+            "name": "C#: PlatformAI Release",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Release",
+            "program": "${workspaceFolder}/PlatformAI/bin/Release/net10.0/PlatformAI.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/PlatformAI",
+            "stopAtEntry": false,
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Production"
+            }
+        },
+        // {
+        //     "name": "C#: PlatformAI Debug",
+        //     "preLaunchTask": "Debug",
+        //     "type": "dotnet",
+        //     "request": "launch",
+        //     "projectPath": "${workspaceFolder}/BTCloud.Scheduler/BTCloud.Scheduler.csproj"
+        // }
+        {
+            "name": "Debug Test (attach)",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}
