@@ -43,6 +43,7 @@ pr:
 
 variables:
   - group: vg-platformai-common
+  - group: vg-platformai-secrets     # KEY VAULT: TEST_MASTER_DB, TEST_APP_DB, ecc.
   - name: dotnetVersion
     value: '10.0.x'
   - name: nodeVersion
@@ -154,6 +155,11 @@ stages:
           /p:CoverletOutput=$(Agent.TempDirectory)/coverage/
         publishTestResults: true
         testRunTitle: 'PlatformAI Unit Tests — $(Build.BuildNumber)'
+      env:
+        # Credenziali DB passate come secret (mai hardcodate nel codice)
+        # Configurare in Azure DevOps → Library → vg-platformai-secrets (linked a Key Vault)
+        TEST_MASTER_DB: $(TEST_MASTER_DB)
+        TEST_APP_DB: $(TEST_APP_DB)
 
     - task: PublishCodeCoverageResults@1
       displayName: 'Publish Code Coverage'

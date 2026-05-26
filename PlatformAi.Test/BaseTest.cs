@@ -52,8 +52,20 @@ public abstract class BaseTest
         // Configurazione DI per i test
         var services = new ServiceCollection();
 
-        string MasterDatabase = "Server=tcp:nephili.database.windows.net,1433;Initial Catalog=MasterPlatformAI;Persist Security Info=False;User ID=marco;Password=Motorol1275;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-        string ApplicationDatabase = "Server=tcp:nephili.database.windows.net,1433;Initial Catalog=TestApplicationAI;Persist Security Info=False;User ID=marco;Password=Motorol1275;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+        // Connection strings: presi da variabili d'ambiente (locale: .env, CI: Azure DevOps secret vars)
+        // MAI hardcoded in questo file — usa le var d'ambiente o appsettings.Development.json
+        string MasterDatabase =
+            Environment.GetEnvironmentVariable("TEST_MASTER_DB")
+            ?? _configuration.GetConnectionString("MasterDatabase")
+            ?? throw new InvalidOperationException(
+                "Connection string 'TEST_MASTER_DB' (env var) or 'ConnectionStrings:MasterDatabase' (appsettings) is required.");
+
+        string ApplicationDatabase =
+            Environment.GetEnvironmentVariable("TEST_APP_DB")
+            ?? _configuration.GetConnectionString("ApplicationDatabase")
+            ?? throw new InvalidOperationException(
+                "Connection string 'TEST_APP_DB' (env var) or 'ConnectionStrings:ApplicationDatabase' (appsettings) is required.");
+
         services.AddDbContext<MasterContext>(options => options.UseSqlServer(MasterDatabase));
         services.AddDbContext<ApplicationContext>(options => options.UseSqlServer(ApplicationDatabase));
 
