@@ -13,6 +13,7 @@ namespace PlatformAI.Tests;
 /// Carica la configurazione da appsettings.json tramite BaseTest
 /// </summary>
 [TestFixture]
+[Category("Integration")]
 public class AzureOpenAIConnectionTests : BaseTest
 {
     private LLMStreamingService _llmService = null!;

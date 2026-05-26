@@ -52,6 +52,9 @@ public abstract class BaseTest
         // Configurazione DI per i test
         var services = new ServiceCollection();
 
+        // Registra IConfiguration nel container DI (richiesto da TrainingService e altri)
+        services.AddSingleton<IConfiguration>(_configuration);
+
         // Connection strings: presi da variabili d'ambiente (locale: .env, CI: Azure DevOps secret vars)
         // MAI hardcoded in questo file — usa le var d'ambiente o appsettings.Development.json
         string MasterDatabase =
@@ -112,6 +115,11 @@ public abstract class BaseTest
 
         _appContext = _serviceProvider.GetRequiredService<ApplicationContext>();
         _masterContext = _serviceProvider.GetRequiredService<MasterContext>();
+
+        // Applica automaticamente le migrazioni pendenti sul DB di test
+        // (es. FlexibleProductionDataMetrics che aggiunge la colonna Metrics)
+        _appContext.Database.Migrate();
+
         _uow = _serviceProvider.GetRequiredService<IUnitOfWork>();
         _authService = _serviceProvider.GetRequiredService<IAuthService>();
         _conversationLogic = _serviceProvider.GetRequiredService<ConversationLogic>();

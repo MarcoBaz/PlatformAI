@@ -44,6 +44,8 @@ pr:
 variables:
   - group: vg-platformai-common
   - group: vg-platformai-secrets     # KEY VAULT: TEST_MASTER_DB, TEST_APP_DB, ecc.
+    # TODO se il gruppo non esiste ancora: Azure DevOps → Library → + Variable group → nome "vg-platformai-secrets"
+    # Aggiungi TEST_MASTER_DB e TEST_APP_DB come Secret variables (o link a Key Vault)
   - name: dotnetVersion
     value: '10.0.x'
   - name: nodeVersion
@@ -143,13 +145,14 @@ stages:
 
     # ── Unit Tests + Coverage ──────────────────────────────
     - task: DotNetCoreCLI@2
-      displayName: 'dotnet test'
+      displayName: 'dotnet test (unit only — esclude [Category(Integration)])'
       inputs:
         command: 'test'
         projects: $(testProject)
         arguments: >
           --configuration $(buildConfiguration)
           --no-build
+          --filter "cat != Integration"
           --logger "trx;LogFileName=test-results.trx"
           /p:CollectCoverage=true
           /p:CoverletOutputFormat=opencover

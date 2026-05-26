@@ -9,6 +9,7 @@ using PlatformAI.Tests;
 namespace PlatformAi.Test;
 
 [TestFixture]
+[Category("Integration")]
 public class LoadTrainingDataAsync:BaseTest
 {
    

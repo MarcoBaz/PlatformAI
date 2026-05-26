@@ -14,6 +14,7 @@ namespace PlatformAI.Tests;
 /// Test per LLMAnalyticsService - genera risposte con grafici
 /// </summary>
 [TestFixture]
+[Category("Integration")]
 public class LLMAnalyticsServiceTests : BaseTest
 {
     private LLMAnalyticsService _analyticsService = null!;

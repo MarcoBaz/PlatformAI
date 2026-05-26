@@ -12,6 +12,7 @@ using PlatformAI.ML.Services;
 namespace PlatformAI.Tests;
 
 [TestFixture]
+[Category("Integration")]
 public class TrainingServiceIntegrationTests : BaseTest
 {
     private TrainingService _trainingService;

@@ -168,9 +168,7 @@ namespace PlatformAI.Controllers
                     .ToList();
 
                 // 3. Genera la risposta completa (attende la risposta intera dal LLM)
-                var fullResponse = await _llmStreamingService.SendToAzureOpenAIOnceAsync(request.Message, chatHistory, cancellationToken);
-                
-                //_llmStreamingService.GenerateCompleteResponseAsync(request.Message,chatHistory,cancellationToken);
+                var fullResponse = await _llmStreamingService.GenerateCompleteResponseAsync(request.Message, chatHistory, cancellationToken);
 
                 // 4. Salva il messaggio completo dell'AI
                 var aiMessageId = Guid.NewGuid().ToString();
