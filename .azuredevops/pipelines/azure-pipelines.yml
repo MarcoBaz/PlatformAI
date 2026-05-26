@@ -84,8 +84,9 @@ stages:
 
     - script: |
         cd $(angularProject)
-        npm ci --prefer-offline --legacy-peer-deps
-      displayName: 'npm ci'
+        # TODO: tornare a "npm ci" dopo aver committato package-lock.json aggiornato
+        npm install --legacy-peer-deps
+      displayName: 'npm install (sync lockfile)'
 
     - script: |
         cd $(angularProject)
