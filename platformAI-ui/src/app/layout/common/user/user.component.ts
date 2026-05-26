@@ -1,6 +1,6 @@
 import { BooleanInput } from '@angular/cdk/coercion';
 import { NgClass } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef,  Component, Input, OnDestroy, OnInit, ViewEncapsulation} from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewEncapsulation } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
@@ -23,7 +23,6 @@ import { User } from './user.model';
         MatMenuModule,
         MatIconModule,
         MatTooltipModule,
-        NgClass,
         MatDividerModule,
     ],
 })
@@ -44,7 +43,7 @@ export class UserComponent implements OnInit, OnDestroy {
         private _changeDetectorRef: ChangeDetectorRef,
         private _router: Router,
         private _userService: UserService
-    ) {}
+    ) { }
 
     // -----------------------------------------------------------------------------------------------------
     // @ Lifecycle hooks

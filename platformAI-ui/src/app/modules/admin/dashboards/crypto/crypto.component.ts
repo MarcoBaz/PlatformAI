@@ -65,7 +65,7 @@ export class CryptoComponent implements OnInit, OnDestroy {
         private _cryptoService: CryptoService,
         private _changeDetectorRef: ChangeDetectorRef,
         private _fuseMediaWatcherService: FuseMediaWatcherService
-    ) {}
+    ) { }
 
     // -----------------------------------------------------------------------------------------------------
     // @ Lifecycle hooks
@@ -210,7 +210,7 @@ export class CryptoComponent implements OnInit, OnDestroy {
                     rotate: 0,
                     minHeight: 40,
                     hideOverlappingLabels: true,
-                    formatter: (value): string =>
+                    formatter: (value: string): string =>
                         DateTime.now()
                             .minus({ minutes: Math.abs(parseInt(value, 10)) })
                             .toFormat('HH:mm'),
