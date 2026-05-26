@@ -1,0 +1,77 @@
+# =============================================================
+# infra-pipeline.yml — PlatformAI IaC Pipeline (Bicep)
+#
+# Triggered solo quando cambiano file in infra/
+# Stages: Validate (lint + what-if) → Deploy AuraAI
+# =============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - infra/**
+
+variables:
+  - group: vg-platformai-common
+  - name: vmImage
+    value: 'ubuntu-latest'
+
+stages:
+- stage: Validate
+  displayName: '✅ Bicep Validate & What-If'
+  jobs:
+  - job: ValidateBicep
+    pool:
+      vmImage: $(vmImage)
+    steps:
+    - task: AzureCLI@2
+      displayName: 'az bicep build (lint)'
+      inputs:
+        azureSubscription: 'Azure-ServiceConnection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az bicep build --file infra/bicep/main.bicep
+          echo "✅ Bicep lint OK"
+
+    - task: AzureCLI@2
+      displayName: 'What-If — AuraAI'
+      inputs:
+        azureSubscription: 'Azure-ServiceConnection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az deployment group what-if \
+            --resource-group $(RESOURCE_GROUP) \
+            --template-file infra/bicep/main.bicep \
+            --parameters infra/bicep/parameters/prod.bicepparam
+
+- stage: Deploy_Infra
+  displayName: '🏗️ Deploy Infra → AuraAI'
+  dependsOn: Validate
+  condition: succeeded()
+  jobs:
+  - deployment: DeployInfra
+    environment: 'platformai-production-infra'
+    pool:
+      vmImage: $(vmImage)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureCLI@2
+            displayName: 'Deploy Bicep → AuraAI'
+            inputs:
+              azureSubscription: 'Azure-ServiceConnection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group create \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --template-file infra/bicep/main.bicep \
+                  --parameters infra/bicep/parameters/prod.bicepparam \
+                  --name "infra-$(Build.BuildId)" \
+                  --mode Incremental
+                echo "✅ Infra deployed — build $(Build.BuildId)"

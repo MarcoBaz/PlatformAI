@@ -20,7 +20,7 @@ public class DataLoader
         //     .Where(p => p.QuantityProduced > 0) // filtri base
         //     .ToListAsync();
         var productRepo = _uow.Repository<ProductionData>();
-        var productions = productRepo.Query(x=> x.Machine.ProductionLine.Department.TenantCode == tenantCode && x.QuantityProduced >0 && x.LastModifiedDate >= TraininDate)
+        var productions = productRepo.Query(x=> x.Machine.ProductionLine.Department.TenantCode == tenantCode && x.LastModifiedDate >= TraininDate)
                             .Include(p=> p.Machine)
                                 .ThenInclude(m=> m.ProductionLine)
                                      .ThenInclude(p=> p.Department)

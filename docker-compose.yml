@@ -1,0 +1,70 @@
+# =============================================================
+# docker-compose.yml — PlatformAI sviluppo locale
+#
+# Uso:
+#   1. cp .env.example .env  (solo la prima volta)
+#   2. Compila i valori in .env
+#   3. docker compose up --build
+#
+# L'app sarà raggiungibile su http://localhost:8080
+# Swagger UI:                http://localhost:8080/swagger
+# =============================================================
+
+services:
+
+  platformai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final          # Usa lo stage finale (runtime, no SDK)
+
+    container_name: platformai-app
+
+    ports:
+      - "8080:8080"          # http://localhost:8080
+
+    environment:
+      # ── ASP.NET Core ──────────────────────────────────────
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+
+      # ── JWT ───────────────────────────────────────────────
+      JwtSettings__Issuer:              ${JWT_ISSUER}
+      JwtSettings__Audience:            ${JWT_AUDIENCE}
+      JwtSettings__SecretKey:           ${JWT_SECRET_KEY}
+      JwtSettings__ExpirationMinutes:   ${JWT_EXPIRATION_MINUTES:-60}
+
+      # ── Connection Strings ────────────────────────────────
+      ConnectionStrings__MasterDatabase:      ${DB_MASTER_CONNECTION}
+      ConnectionStrings__ApplicationDatabase: ${DB_APP_CONNECTION}
+      ConnectionStrings__BlobStorage:         ${BLOB_STORAGE_CONNECTION}
+
+      # ── LLM / Azure OpenAI ────────────────────────────────
+      LLMSettings__Provider:        ${LLM_PROVIDER:-AzureOpenAI}
+      LLMSettings__Endpoint:        ${LLM_ENDPOINT}
+      LLMSettings__ApiKey:          ${LLM_API_KEY}
+      LLMSettings__DeploymentName:  ${LLM_DEPLOYMENT_NAME:-gpt-4o-mini}
+      LLMSettings__ApiVersion:      ${LLM_API_VERSION:-2024-12-01-preview}
+      LLMSettings__AgentId:         ${LLM_AGENT_ID}
+      LLMSettings__AgentName:       ${LLM_AGENT_NAME}
+      LLMSettings__AgentInstructions: ${LLM_AGENT_INSTRUCTIONS}
+
+      # ── ML ────────────────────────────────────────────────
+      ML__ModelPath: ${ML_MODEL_PATH:-models/productionModel.zip}
+
+      # ── CORS ──────────────────────────────────────────────
+      AllowedOrigins__0: http://localhost:4200
+      AllowedOrigins__1: http://localhost:8080
+
+    volumes:
+      # Persiste i log fuori dal container
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

@@ -61,6 +61,13 @@ public class ApplicationContext : DbContext, IAppDbContext
                .HasForeignKey(p => p.ProductionLineId)
                .OnDelete(DeleteBehavior.Restrict);
 
-
+        // Serializza il dizionario Metrics come JSON su una colonna nvarchar(max)
+        modelBuilder.Entity<ProductionData>()
+            .Property(e => e.Metrics)
+            .HasConversion(
+                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new Dictionary<string, decimal>()
+            )
+            .HasColumnType("nvarchar(max)");
     }
 }

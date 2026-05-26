@@ -17,11 +17,11 @@ namespace PlatformAI.Analytics.Services
         {
             var data = recentData?.ToArray() ?? Array.Empty<ProductionData>();
 
-            float cycleTimeAvg = data.Any() ? (float)data.Average(d => (double)d.CycleTime) : 0f;
-            float energyAvg = data.Any() ? (float)data.Average(d => (double)d.EnergyConsumption) : 0f;
-            float tempAvg = data.Any() ? (float)data.Average(d => (double)d.Temperature) : 0f;
-            float qtySum = data.Any() ? data.Sum(d => d.QuantityProduced) : 0;
-            float scrapSum = data.Any() ? data.Sum(d => d.ScrapQuantity) : 0;
+            float cycleTimeAvg = data.Any() ? (float)data.Average(d => (double)d.GetMetric("cycle_time")) : 0f;
+            float energyAvg    = data.Any() ? (float)data.Average(d => (double)d.GetMetric("energy_consumption")) : 0f;
+            float tempAvg      = data.Any() ? (float)data.Average(d => (double)d.GetMetric("temperature")) : 0f;
+            float qtySum       = data.Any() ? (float)data.Sum(d => d.GetMetric("quantity_produced")) : 0;
+            float scrapSum     = data.Any() ? (float)data.Sum(d => d.GetMetric("scrap_quantity")) : 0;
             float scrapRatio = qtySum > 0 ? scrapSum / qtySum : 0f;
 
             // downtime events in last hour

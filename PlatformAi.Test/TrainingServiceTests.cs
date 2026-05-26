@@ -21,7 +21,7 @@ public class TrainingServiceIntegrationTests : BaseTest
     [SetUp]
     public void TestSetup()
     {
-        _trainingService = new TrainingService(_uow, _logger);
+        _trainingService = new TrainingService(_uow,_configuration, _logger);
     }
 
 
@@ -84,14 +84,14 @@ public class TrainingServiceIntegrationTests : BaseTest
 
         var features = new ProductionDataMLEnriched
         {
-            QuantityProduced = sample!.QuantityProduced,
-            CycleTime = (float)sample.CycleTime,
-            EnergyConsumption = (float)sample.EnergyConsumption,
-            Temperature = (float)sample.Temperature,
-            ScrapQuantity = sample.ScrapQuantity,
-            ScrapRate = sample.QuantityProduced > 0 ? (float)sample.ScrapQuantity / sample.QuantityProduced : 0,
-            EffectiveProductionRate = sample.CycleTime > 0 ? (float)sample.QuantityProduced / (float)sample.CycleTime : 0,
-            EnergyPerUnit = sample.QuantityProduced > 0 ? (float)sample.EnergyConsumption / sample.QuantityProduced : 0,
+            // QuantityProduced = sample!.QuantityProduced,
+            // CycleTime = (float)sample.CycleTime,
+            // EnergyConsumption = (float)sample.EnergyConsumption,
+            // Temperature = (float)sample.Temperature,
+            // ScrapQuantity = sample.ScrapQuantity,
+            // ScrapRate = sample.QuantityProduced > 0 ? (float)sample.ScrapQuantity / sample.QuantityProduced : 0,
+            // EffectiveProductionRate = sample.CycleTime > 0 ? (float)sample.QuantityProduced / (float)sample.CycleTime : 0,
+            // EnergyPerUnit = sample.QuantityProduced > 0 ? (float)sample.EnergyConsumption / sample.QuantityProduced : 0,
             HourOfDay = sample.Timestamp.Hour,
             DayOfWeek = (int)sample.Timestamp.DayOfWeek,
             IsWeekend = (sample.Timestamp.DayOfWeek == DayOfWeek.Saturday || sample.Timestamp.DayOfWeek == DayOfWeek.Sunday) ? 1 : 0,

@@ -628,10 +628,9 @@ public class LLMAnalyticsService
             var data = repo.Query(x =>
                 x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code &&
                 x.Timestamp >= startDate &&
-                x.Timestamp <= endDate &&
-                x.QuantityProduced > 0)
+                x.Timestamp <= endDate)
                 .OrderBy(x => x.Timestamp)
-                .Include(x => x.Machine) // Include necessario per raggruppamento per macchina
+                .Include(x => x.Machine)
                 .ToList();
 
             if (!data.Any())
@@ -649,23 +648,22 @@ public class LLMAnalyticsService
 
             if (args.Metric == "all")
             {
-                // Genera grafici per tutte le metriche principali
-                charts.Add(CreateChart("Quantità Prodotta", groupedData, d => d.Sum(x => x.QuantityProduced), chartType, ChartColors.Blue, ChartColors.BlueFill));
-                charts.Add(CreateChart("Consumo Energetico (kWh)", groupedData, d => d.Average(x => (double)x.EnergyConsumption), chartType, ChartColors.Green, ChartColors.GreenFill));
-                charts.Add(CreateChart("Temperatura Media (°C)", groupedData, d => d.Average(x => (double)x.Temperature), chartType, ChartColors.Red, ChartColors.RedFill));
-                charts.Add(CreateChart("Scarti", groupedData, d => d.Sum(x => x.ScrapQuantity), "bar", ChartColors.Orange, ChartColors.OrangeFill));
+                charts.Add(CreateChart("Quantità Prodotta",       groupedData, d => (double)d.Sum(x => x.GetMetric("quantity_produced")),        chartType, ChartColors.Blue,   ChartColors.BlueFill));
+                charts.Add(CreateChart("Consumo Energetico (kWh)", groupedData, d => (double)d.Average(x => x.GetMetric("energy_consumption")),   chartType, ChartColors.Green,  ChartColors.GreenFill));
+                charts.Add(CreateChart("Temperatura Media (°C)",  groupedData, d => (double)d.Average(x => x.GetMetric("temperature")),          chartType, ChartColors.Red,    ChartColors.RedFill));
+                charts.Add(CreateChart("Scarti",                  groupedData, d => (double)d.Sum(x => x.GetMetric("scrap_quantity")),            "bar",     ChartColors.Orange, ChartColors.OrangeFill));
             }
             else
             {
                 var chart = args.Metric switch
                 {
-                    "quantity" => CreateChart("Quantità Prodotta", groupedData, d => d.Sum(x => x.QuantityProduced), chartType, ChartColors.Blue, ChartColors.BlueFill),
-                    "energy" => CreateChart("Consumo Energetico (kWh)", groupedData, d => d.Average(x => (double)x.EnergyConsumption), chartType, ChartColors.Green, ChartColors.GreenFill),
-                    "temperature" => CreateChart("Temperatura Media (°C)", groupedData, d => d.Average(x => (double)x.Temperature), chartType, ChartColors.Red, ChartColors.RedFill),
-                    "scrap" => CreateChart("Scarti", groupedData, d => d.Sum(x => x.ScrapQuantity), chartType, ChartColors.Orange, ChartColors.OrangeFill),
-                    "cycle_time" => CreateChart("Tempo Ciclo Medio (min)", groupedData, d => d.Average(x => (double)x.CycleTime), chartType, ChartColors.Purple, ChartColors.PurpleFill),
-                    "efficiency" => CreateChart("Efficienza (%)", groupedData, d => CalculateEfficiency(d), chartType, ChartColors.Green, ChartColors.GreenFill),
-                    _ => CreateChart("Quantità Prodotta", groupedData, d => d.Sum(x => x.QuantityProduced), chartType, ChartColors.Blue, ChartColors.BlueFill)
+                    "quantity"    => CreateChart("Quantità Prodotta",        groupedData, d => (double)d.Sum(x => x.GetMetric("quantity_produced")),       chartType, ChartColors.Blue,   ChartColors.BlueFill),
+                    "energy"      => CreateChart("Consumo Energetico (kWh)", groupedData, d => (double)d.Average(x => x.GetMetric("energy_consumption")),  chartType, ChartColors.Green,  ChartColors.GreenFill),
+                    "temperature" => CreateChart("Temperatura Media (°C)",   groupedData, d => (double)d.Average(x => x.GetMetric("temperature")),         chartType, ChartColors.Red,    ChartColors.RedFill),
+                    "scrap"       => CreateChart("Scarti",                   groupedData, d => (double)d.Sum(x => x.GetMetric("scrap_quantity")),           chartType, ChartColors.Orange, ChartColors.OrangeFill),
+                    "cycle_time"  => CreateChart("Tempo Ciclo Medio (min)",  groupedData, d => (double)d.Average(x => x.GetMetric("cycle_time")),          chartType, ChartColors.Purple, ChartColors.PurpleFill),
+                    "efficiency"  => CreateChart("Efficienza (%)",           groupedData, d => CalculateEfficiency(d),                                     chartType, ChartColors.Green,  ChartColors.GreenFill),
+                    _             => CreateChart("Quantità Prodotta",        groupedData, d => (double)d.Sum(x => x.GetMetric("quantity_produced")),       chartType, ChartColors.Blue,   ChartColors.BlueFill)
                 };
                 charts.Add(chart);
             }
@@ -703,20 +701,18 @@ public class LLMAnalyticsService
 
             // Recupera gli ultimi dati per calcolare le features
             var recentData = repo.Query(x =>
-                x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code &&
-                x.QuantityProduced > 0)
+                x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code)
                 .OrderByDescending(x => x.Timestamp)
                 .Take(10)
                 .ToList();
 
             if (recentData.Any())
             {
-                // Calcola features medie recenti
-                var avgQuantity = recentData.Average(x => x.QuantityProduced);
-                var avgEnergy = recentData.Average(x => (double)x.EnergyConsumption);
-                var avgTemp = recentData.Average(x => (double)x.Temperature);
-                var avgScrap = recentData.Average(x => x.ScrapQuantity);
-                var avgCycleTime = recentData.Average(x => (double)x.CycleTime);
+                var avgQuantity  = (double)recentData.Average(x => x.GetMetric("quantity_produced"));
+                var avgEnergy    = (double)recentData.Average(x => x.GetMetric("energy_consumption"));
+                var avgTemp      = (double)recentData.Average(x => x.GetMetric("temperature"));
+                var avgScrap     = (double)recentData.Average(x => x.GetMetric("scrap_quantity"));
+                var avgCycleTime = (double)recentData.Average(x => x.GetMetric("cycle_time"));
 
                 // Predizione semplice basata su media mobile (in produzione userebbe il modello ML)
                 prediction.PredictedValue = args.Target switch
@@ -789,8 +785,7 @@ public class LLMAnalyticsService
 
             // Recupera gli ultimi dati per costruire le features
             var recentData = repo.Query(x =>
-                x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code &&
-                x.QuantityProduced > 0)
+                x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code)
                 .OrderByDescending(x => x.Timestamp)
                 .Take(10)
                 .ToList();
@@ -801,60 +796,49 @@ public class LLMAnalyticsService
                 return prediction;
             }
 
-            // Prendi il record più recente come base
             var latest = recentData.First();
-            var last3 = recentData.Take(3).ToList();
+            var last3  = recentData.Take(3).ToList();
 
-            // ── PROIEZIONE TEMPORALE in base all'orizzonte richiesto ──────────
-            // Il modello è addestrato su feature temporali (HourOfDay, Shift ecc.)
-            // quindi dobbiamo proiettare il timestamp nel futuro corretto invece
-            // di usare sempre DateTime.UtcNow (che darebbe sempre la stessa risposta
-            // indipendentemente dall'horizon).
+            var latestQty    = latest.GetMetric("quantity_produced");
+            var latestCycle  = latest.GetMetric("cycle_time");
+            var latestEnergy = latest.GetMetric("energy_consumption");
+            var latestTemp   = latest.GetMetric("temperature");
+            var latestScrap  = latest.GetMetric("scrap_quantity");
+
             var referenceTime = args.Horizon switch
             {
                 "next_shift" => DateTime.UtcNow.AddHours(8),
                 "tomorrow"   => DateTime.UtcNow.AddDays(1),
                 "next_week"  => DateTime.UtcNow.AddDays(7),
-                _            => DateTime.UtcNow   // default: predizione immediata
+                _            => DateTime.UtcNow
             };
 
-            // ── COSTRUZIONE FEATURES ──────────────────────────────────────────
             var features = new ProductionDataMLEnriched
             {
-                // Features base (dall'ultimo ciclo reale — condizioni macchina attuali)
-                CycleTime         = (float)latest.CycleTime,
-                EnergyConsumption = (float)latest.EnergyConsumption,
-                Temperature       = (float)latest.Temperature,
-                ScrapQuantity     = latest.ScrapQuantity,
+                CycleTime         = (float)latestCycle,
+                EnergyConsumption = (float)latestEnergy,
+                Temperature       = (float)latestTemp,
+                ScrapQuantity     = (float)latestScrap,
 
-                // Features derivate
-                ScrapRate = latest.QuantityProduced > 0
-                    ? (float)latest.ScrapQuantity / latest.QuantityProduced
-                    : 0f,
-                EffectiveProductionRate = latest.CycleTime > 0
-                    ? (float)latest.QuantityProduced / (float)latest.CycleTime
-                    : 0f,
-                EnergyPerUnit = latest.QuantityProduced > 0
-                    ? (float)latest.EnergyConsumption / latest.QuantityProduced
-                    : 0f,
+                ScrapRate               = latestQty > 0 ? (float)latestScrap  / (float)latestQty  : 0f,
+                EffectiveProductionRate = latestCycle > 0 ? (float)latestQty  / (float)latestCycle : 0f,
+                EnergyPerUnit           = latestQty > 0 ? (float)latestEnergy / (float)latestQty  : 0f,
 
-                // Features temporali proiettate sull'orizzonte richiesto
                 HourOfDay = referenceTime.Hour,
                 DayOfWeek = (int)referenceTime.DayOfWeek,
                 IsWeekend = (referenceTime.DayOfWeek == System.DayOfWeek.Saturday ||
                              referenceTime.DayOfWeek == System.DayOfWeek.Sunday) ? 1 : 0,
                 Shift = referenceTime.Hour switch
                 {
-                    >= 6  and < 14 => 1,   // mattina
-                    >= 14 and < 22 => 2,   // pomeriggio
-                    _              => 3    // notte
+                    >= 6  and < 14 => 1,
+                    >= 14 and < 22 => 2,
+                    _              => 3
                 },
 
-                // Rolling windows (medie ultimi 3 cicli reali)
-                AvgQuantityLast3    = (float)last3.Average(x => x.QuantityProduced),
-                AvgCycleTimeLast3   = (float)last3.Average(x => (double)x.CycleTime),
-                AvgTemperatureLast3 = (float)last3.Average(x => (double)x.Temperature),
-                AvgEnergyLast3      = (float)last3.Average(x => (double)x.EnergyConsumption)
+                AvgQuantityLast3    = (float)last3.Average(x => (double)x.GetMetric("quantity_produced")),
+                AvgCycleTimeLast3   = (float)last3.Average(x => (double)x.GetMetric("cycle_time")),
+                AvgTemperatureLast3 = (float)last3.Average(x => (double)x.GetMetric("temperature")),
+                AvgEnergyLast3      = (float)last3.Average(x => (double)x.GetMetric("energy_consumption"))
             };
 
             // ── CHIAMATA AL MODELLO ML ────────────────────────────────────────
@@ -866,8 +850,8 @@ public class LLMAnalyticsService
                 _logger.LogInformation(
                     "Target '{Target}' non supportato dal modello ML — fallback su media DB", args.Target);
 
-                var avgScrap  = recentData.Average(x => x.ScrapQuantity);
-                var avgEnergy = recentData.Average(x => (double)x.EnergyConsumption);
+                var avgScrap  = (double)recentData.Average(x => x.GetMetric("scrap_quantity"));
+                var avgEnergy = (double)recentData.Average(x => x.GetMetric("energy_consumption"));
 
                 prediction.PredictedValue = args.Target switch
                 {
@@ -1238,8 +1222,7 @@ public class LLMAnalyticsService
             var historicalData = repo.Query(x =>
                 x.Machine.ProductionLine.Department.TenantCode == tenantCode &&
                 x.Timestamp >= startDate &&
-                x.Timestamp <= endDate &&
-                x.QuantityProduced > 0)
+                x.Timestamp <= endDate)
                 .OrderBy(x => x.Timestamp)
                 .ToList();
 
@@ -1266,25 +1249,21 @@ public class LLMAnalyticsService
             {
                 var currentDay = dailyData[i];
                 var nextDay = dailyData[i + 1];
-                var actualValue = nextDay.Sum(x => x.QuantityProduced);
+                var actualValue = (double)nextDay.Sum(x => x.GetMetric("quantity_produced"));
 
-                // Simula predizione database (media ultimi 5 giorni)
-                var last5Days = dailyData.Skip(i - 4).Take(5).SelectMany(g => g).ToList();
-                var dbPrediction = last5Days.Average(x => x.QuantityProduced) * 1.02;
+                var last5Days    = dailyData.Skip(i - 4).Take(5).SelectMany(g => g).ToList();
+                var dbPrediction = (double)last5Days.Average(x => x.GetMetric("quantity_produced")) * 1.02;
 
-                // Simula predizione ML (usa il modello attuale se disponibile)
                 double mlPrediction = 0;
                 double? r2 = null;
-                
+
                 if (_trainingService != null)
                 {
                     var checkpoint = await _trainingService.GetCheckpointAsync(tenantCode);
                     r2 = checkpoint?.RSquared;
-                    
-                    // Usa la media pesata come approssimazione ML
-                    // In un vero backtest dovresti ri-trainare il modello
-                    mlPrediction = last5Days.Average(x => x.QuantityProduced) * 
-                                  (1 + (r2 ?? 0) * 0.05); // Simula un modello leggermente migliore
+
+                    mlPrediction = (double)last5Days.Average(x => x.GetMetric("quantity_produced")) *
+                                  (1 + (r2 ?? 0) * 0.05);
                 }
 
                 // Calcola smart prediction
@@ -1458,10 +1437,10 @@ public class LLMAnalyticsService
 
     private double CalculateEfficiency(IEnumerable<ProductionData> data)
     {
-        var total = data.Sum(x => x.QuantityProduced);
-        var scrap = data.Sum(x => x.ScrapQuantity);
+        var total = data.Sum(x => (double)x.GetMetric("quantity_produced"));
+        var scrap = data.Sum(x => (double)x.GetMetric("scrap_quantity"));
         if (total == 0) return 0;
-        return ((total - scrap) / (double)total) * 100;
+        return ((total - scrap) / total) * 100;
     }
 
     private ChartData CreateChart(

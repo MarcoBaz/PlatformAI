@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML;
 using Microsoft.ML.Trainers.FastTree;
@@ -49,13 +50,17 @@ public class TrainingService
     private readonly IncrementalTrainingConfig _config;
     private readonly BlobStoragePersistence _blobStorage;
 
-    public TrainingService(IUnitOfWork uow, ILogger<TrainingService>? logger = null, IncrementalTrainingConfig? config = null)
+    public TrainingService(IUnitOfWork uow, IConfiguration configuration, ILogger<TrainingService>? logger = null, IncrementalTrainingConfig? config = null)
     {
         _mlContext = new MLContext(seed: 42);
         _uow = uow;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<TrainingService>.Instance;
         _config = config ?? new IncrementalTrainingConfig();
-        _blobStorage = new BlobStoragePersistence(_mlContext, _logger);
+
+        var blobConnectionString = configuration.GetConnectionString("BlobStorage")
+            ?? throw new InvalidOperationException("ConnectionStrings:BlobStorage non configurata in appsettings.json");
+
+        _blobStorage = new BlobStoragePersistence(_mlContext, blobConnectionString, _logger);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -223,8 +228,7 @@ public class TrainingService
     private List<ProductionData> LoadDataSinceCheckpoint(string tenantCode, DateTime lastProcessedDate)
     {
         var repo = _uow.Repository<ProductionData>();
-      // esclude cicli con zero produzione 
-        var query = repo.Query(x => x.QuantityProduced > 0 &&  x.LastModifiedDate > lastProcessedDate)
+        var query = repo.Query(x => x.LastModifiedDate > lastProcessedDate)
             .Include(x => x.Machine)
             .ThenInclude(m => m.ProductionLine)
             .ThenInclude(pl => pl.Department)
@@ -252,7 +256,6 @@ public class TrainingService
 
         var query = repo.Query(x =>
             x.Machine.ProductionLine.Department.TenantCode == tenantCode &&
-            x.QuantityProduced > 0 &&
             x.LastModifiedDate > historicalCutoff &&
             x.LastModifiedDate <= beforeDate);
 
@@ -551,35 +554,27 @@ public class TrainingService
         for (int i = 0; i < ordered.Count; i++)
         {
             var current = ordered[i];
+            var qty     = current.GetMetric("quantity_produced");
+            var scrap   = current.GetMetric("scrap_quantity");
+            var cycle   = current.GetMetric("cycle_time");
+            var energy  = current.GetMetric("energy_consumption");
+            var temp    = current.GetMetric("temperature");
+
             var item = new ProductionDataEnriched
             {
                 // ── FEATURE GREZZE ─────────────────────────────────────────────
-                QuantityProduced  = current.QuantityProduced,  // questa è la LABEL, non una feature
-                ScrapQuantity     = current.ScrapQuantity,
-                CycleTime         = current.CycleTime,
-                EnergyConsumption = current.EnergyConsumption,
-                Temperature       = current.Temperature,
+                QuantityProduced  = (int)qty,   // questa è la LABEL, non una feature
+                ScrapQuantity     = (int)scrap,
+                CycleTime         = cycle,
+                EnergyConsumption = energy,
+                Temperature       = temp,
 
                 // ── FEATURE DERIVATE ───────────────────────────────────────────
-                // ScrapRate: percentuale di scarti sul totale prodotto.
-                // Perché non usare ScrapQuantity direttamente?
-                // 1000 pezzi con 50 scarti (5%) ≠ 100 pezzi con 50 scarti (50%).
-                // Il ratio normalizza rispetto al volume prodotto.
-                ScrapRate = current.QuantityProduced > 0
-                    ? (float)current.ScrapQuantity / current.QuantityProduced
-                    : 0,
+                ScrapRate = qty > 0 ? (float)scrap / (float)qty : 0,
 
-                // EffectiveProductionRate: pezzi prodotti per unità di tempo.
-                // Cattura l'efficienza della macchina indipendentemente dalla durata del ciclo.
-                EffectiveProductionRate = current.CycleTime > 0
-                    ? (float)current.QuantityProduced / (float)current.CycleTime
-                    : 0,
+                EffectiveProductionRate = cycle > 0 ? (float)qty / (float)cycle : 0,
 
-                // EnergyPerUnit: energia consumata per ogni pezzo prodotto.
-                // Un aumento può segnalare usura meccanica o inefficienza.
-                EnergyPerUnit = current.QuantityProduced > 0
-                    ? (float)current.EnergyConsumption / current.QuantityProduced
-                    : 0,
+                EnergyPerUnit = qty > 0 ? (float)energy / (float)qty : 0,
 
                 // ── FEATURE TEMPORALI ──────────────────────────────────────────
                 // HourOfDay: cattura variazioni intragiornaliere
@@ -617,10 +612,10 @@ public class TrainingService
             if (i >= 2)
             {
                 var last3 = ordered.Skip(i - 2).Take(3).ToList();
-                item.AvgQuantityLast3    = (float)last3.Average(x => x.QuantityProduced);
-                item.AvgCycleTimeLast3   = (float)last3.Average(x => (double)x.CycleTime);
-                item.AvgTemperatureLast3 = (float)last3.Average(x => (double)x.Temperature);
-                item.AvgEnergyLast3      = (float)last3.Average(x => (double)x.EnergyConsumption);
+                item.AvgQuantityLast3    = (float)last3.Average(x => (double)x.GetMetric("quantity_produced"));
+                item.AvgCycleTimeLast3   = (float)last3.Average(x => (double)x.GetMetric("cycle_time"));
+                item.AvgTemperatureLast3 = (float)last3.Average(x => (double)x.GetMetric("temperature"));
+                item.AvgEnergyLast3      = (float)last3.Average(x => (double)x.GetMetric("energy_consumption"));
             }
 
             enriched.Add(item);

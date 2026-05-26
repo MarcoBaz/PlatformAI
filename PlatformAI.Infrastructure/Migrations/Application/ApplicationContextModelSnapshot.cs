@@ -369,12 +369,6 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                     b.Property<DateTime>("CreateDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal>("CycleTime")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("EnergyConsumption")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTime>("LastModifiedDate")
                         .HasColumnType("datetime2");
 
@@ -384,17 +378,13 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                     b.Property<Guid>("MachineId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Metrics")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValue("{}");
+
                     b.Property<Guid>("ProductionOrderId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("QuantityProduced")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ScrapQuantity")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Temperature")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("datetime2");

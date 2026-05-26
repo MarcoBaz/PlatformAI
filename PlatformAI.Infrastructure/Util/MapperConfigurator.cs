@@ -20,12 +20,7 @@ public class MapperConfigurator
                                     .ForMember(dest => dest.ProductionOrderId, md => md.MapFrom(src => Guid.Parse(src.ProductionOrderId)));
                 cfg.CreateMap<ProductionData, ProductionDataDTO>()
                       .ForMember(dest => dest.MachineId, MD => MD.MapFrom(src => src.MachineId.ToString()))
-                      .ForMember(dest => dest.ProductionOrderId, MD => MD.MapFrom(src => src.ProductionOrderId.ToString()))
-                      .ForMember(dest => dest.CycleTime, MD => MD.MapFrom(src => Convert.ToSingle(src.CycleTime)))
-                      .ForMember(dest => dest.EnergyConsumption, MD => MD.MapFrom(src => Convert.ToSingle(src.EnergyConsumption)))
-                      .ForMember(dest => dest.Temperature, MD => MD.MapFrom(src => Convert.ToSingle(src.Temperature)))
-                      .ForMember(dest => dest.QuantityProduced, MD => MD.MapFrom(src => Convert.ToSingle(src.QuantityProduced)))
-                      .ForMember(dest => dest.ScrapQuantity, MD => MD.MapFrom(src => Convert.ToSingle(src.ScrapQuantity)));
+                      .ForMember(dest => dest.ProductionOrderId, MD => MD.MapFrom(src => src.ProductionOrderId.ToString()));
                 #endregion
 #region User
               cfg.CreateMap<User, UserDTO>();

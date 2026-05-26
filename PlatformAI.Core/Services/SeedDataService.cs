@@ -119,15 +119,18 @@ public class SeedDataService
                     var ts = startTime.AddMinutes(slot * 30);
                     await _uow.Repository<ProductionData>().AddAsync(new ProductionData
                     {
-                        Id                  = Guid.NewGuid(),
-                        MachineId           = machine.Id,
-                        ProductionOrderId   = order.Id,
-                        Timestamp           = ts,
-                        QuantityProduced    = _rng.Next(80, 121),
-                        ScrapQuantity       = _rng.Next(0, 6),
-                        CycleTime           = Math.Round((decimal)(1.5 + _rng.NextDouble() * 2.0), 2),
-                        EnergyConsumption   = Math.Round((decimal)(80.0 + _rng.NextDouble() * 40.0), 1),
-                        Temperature         = Math.Round((decimal)(35.0 + _rng.NextDouble() * 20.0), 1),
+                        Id                = Guid.NewGuid(),
+                        MachineId         = machine.Id,
+                        ProductionOrderId = order.Id,
+                        Timestamp         = ts,
+                        Metrics = new Dictionary<string, decimal>
+                        {
+                            ["quantity_produced"]  = _rng.Next(80, 121),
+                            ["scrap_quantity"]     = _rng.Next(0, 6),
+                            ["cycle_time"]         = Math.Round((decimal)(1.5 + _rng.NextDouble() * 2.0), 2),
+                            ["energy_consumption"] = Math.Round((decimal)(80.0 + _rng.NextDouble() * 40.0), 1),
+                            ["temperature"]        = Math.Round((decimal)(35.0 + _rng.NextDouble() * 20.0), 1),
+                        }
                     });
                     pdCount++;
                 }

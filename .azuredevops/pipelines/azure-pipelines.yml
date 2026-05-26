@@ -1,0 +1,247 @@
+# =============================================================
+# azure-pipelines.yml — PlatformAI CI/CD Pipeline
+#
+# Progetto:  PlatformAI (.NET 10 + Angular)
+# Azure:     Resource Group: AuraAI | App Service: IndustrialAI
+# GitHub:    MarcoBaz/PlatformAI
+#
+# Stages:
+#   1. CI          → Angular build + .NET build + test + SonarQube
+#   2. SecurityScan → Trivy vulnerability scan
+#   3. Docker      → build image + push ad Azure Container Registry
+#   4. Deploy_Dev  → deploy su slot "dev" di IndustrialAI (auto)
+#   5. Deploy_Staging → deploy su slot "staging" (auto)
+#   6. Deploy_Prod → deploy + slot swap (manual approval gate)
+#
+# Variable Groups (da configurare in Azure DevOps → Library):
+#   vg-platformai-common:
+#     ACR_NAME             → nome ACR (es. "platformaiacr")
+#     SONAR_PROJECT_KEY    → chiave progetto SonarQube
+#     APP_SERVICE_NAME     → "IndustrialAI"
+#     RESOURCE_GROUP       → "AuraAI"
+#   vg-platformai-secrets (linked to Key Vault):
+#     SONAR_TOKEN          → token SonarQube
+# =============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - release/*
+  paths:
+    exclude:
+      - 'Docs/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'infra/**'        # Gestito da infra-pipeline.yml separato
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+variables:
+  - group: vg-platformai-common
+  - name: dotnetVersion
+    value: '10.0.x'
+  - name: nodeVersion
+    value: '22.x'
+  - name: buildConfiguration
+    value: 'Release'
+  - name: imageTag
+    value: '$(Build.BuildId)'
+  - name: vmImage
+    value: 'ubuntu-latest'
+  - name: angularProject
+    value: 'platformAI-ui'
+  - name: solutionFile
+    value: 'PlatformAI.sln'
+  - name: testProject
+    value: 'PlatformAi.Test/PlatformAi.Test.csproj'
+  - name: mainProject
+    value: 'PlatformAI/PlatformAI.csproj'
+
+# ─────────────────────────────────────────────────────────────
+# STAGE 1: CI — Angular + .NET build, test, SonarQube
+# ─────────────────────────────────────────────────────────────
+stages:
+- stage: CI
+  displayName: '🔨 Build & Test'
+  jobs:
+  - job: BuildAndTest
+    displayName: 'Angular + .NET 10 — Build, Test, Analyze'
+    pool:
+      vmImage: $(vmImage)
+
+    steps:
+    # ── Node.js / Angular ──────────────────────────────────
+    - task: NodeTool@0
+      displayName: 'Install Node.js $(nodeVersion)'
+      inputs:
+        versionSpec: $(nodeVersion)
+
+    - script: |
+        cd $(angularProject)
+        npm ci --prefer-offline
+      displayName: 'npm ci'
+
+    - script: |
+        cd $(angularProject)
+        npm run build -- --configuration=production
+      displayName: 'Angular build (production)'
+
+    - script: |
+        cd $(angularProject)
+        npx ng test --watch=false --browsers=ChromeHeadless --code-coverage || true
+      displayName: 'Angular unit tests (Karma)'
+      continueOnError: true
+
+    # Copia dist in wwwroot per il build .NET
+    - script: |
+        mkdir -p PlatformAI/wwwroot
+        cp -r $(angularProject)/dist/fuse/browser/. PlatformAI/wwwroot/
+      displayName: 'Copy Angular dist → wwwroot'
+
+    # ── .NET Setup ─────────────────────────────────────────
+    - task: UseDotNet@2
+      displayName: 'Install .NET $(dotnetVersion)'
+      inputs:
+        version: $(dotnetVersion)
+        includePreviewVersions: true
+
+    # ── SonarQube: Prepare ─────────────────────────────────
+    # TODO: abilitare quando SonarQube Service Connection è configurata
+    # - task: SonarQubePrepare@5
+    #   displayName: 'SonarQube — Prepare'
+    #   inputs:
+    #     SonarQube: 'SonarQube-ServiceConnection'
+    #     scannerMode: 'MSBuild'
+    #     projectKey: $(SONAR_PROJECT_KEY)
+    #     projectName: 'PlatformAI'
+    #     extraProperties: |
+    #       sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/coverage/*.opencover.xml
+    #       sonar.cs.vstest.reportsPaths=$(Agent.TempDirectory)/TestResults/*.trx
+    #       sonar.exclusions=**/obj/**,**/bin/**,**/Migrations/**,**/wwwroot/**,platformAI-ui/**
+    #       sonar.coverage.exclusions=**/Program.cs,**/*.csproj,**/Migrations/**
+
+    # ── Restore + Build ────────────────────────────────────
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet restore'
+      inputs:
+        command: 'restore'
+        projects: $(solutionFile)
+
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet build'
+      inputs:
+        command: 'build'
+        projects: $(solutionFile)
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    # ── Unit Tests + Coverage ──────────────────────────────
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet test'
+      inputs:
+        command: 'test'
+        projects: $(testProject)
+        arguments: >
+          --configuration $(buildConfiguration)
+          --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          /p:CollectCoverage=true
+          /p:CoverletOutputFormat=opencover
+          /p:CoverletOutput=$(Agent.TempDirectory)/coverage/
+        publishTestResults: true
+        testRunTitle: 'PlatformAI Unit Tests — $(Build.BuildNumber)'
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish Code Coverage'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/coverage/*.opencover.xml'
+        failIfCoverageEmpty: false
+
+    # ── SonarQube: Analyze ─────────────────────────────────
+    # TODO: abilitare quando SonarQube Service Connection è configurata
+    # - task: SonarQubeAnalyze@5
+    #   displayName: 'SonarQube — Analyze'
+    # - task: SonarQubePublish@5
+    #   displayName: 'SonarQube — Quality Gate'
+    #   inputs:
+    #     pollingTimeoutSec: '300'
+
+    # ── Publish artifact ───────────────────────────────────
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet publish'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: $(mainProject)
+        arguments: >
+          --configuration $(buildConfiguration)
+          --no-build
+          -r linux-x64
+          --self-contained false
+          -o $(Build.ArtifactStagingDirectory)/app
+        zipAfterPublish: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifact: drop'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+
+# ─────────────────────────────────────────────────────────────
+# STAGE 2: Security Scan (Trivy)
+# TODO: abilitare quando la pipeline CI base funziona
+# ─────────────────────────────────────────────────────────────
+# - stage: SecurityScan
+#   displayName: '🔒 Security Scan'
+#   dependsOn: CI
+#   condition: succeeded()
+#   jobs:
+#   - job: TrivyScan
+#     pool:
+#       vmImage: $(vmImage)
+#     steps:
+#     - script: |
+#         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+#       displayName: 'Install Trivy'
+#     - script: |
+#         trivy fs . --exit-code 0 --severity HIGH,CRITICAL --format table
+#       displayName: 'Trivy Scan'
+
+# ─────────────────────────────────────────────────────────────
+# STAGE 3: Docker Build & Push to ACR
+# TODO: abilitare quando ACR-ServiceConnection è configurata
+# ─────────────────────────────────────────────────────────────
+# - stage: Docker
+#   displayName: '🐳 Docker — Build & Push ACR'
+#   dependsOn: SecurityScan
+#   condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+#   jobs:
+#   - job: DockerBuildPush
+#     pool:
+#       vmImage: $(vmImage)
+#     steps:
+#     - task: Docker@2
+#       inputs:
+#         command: 'buildAndPush'
+#         repository: '$(ACR_NAME).azurecr.io/platformai'
+#         dockerfile: 'Dockerfile'
+#         containerRegistry: 'ACR-ServiceConnection'
+#         tags: |
+#           $(imageTag)
+#           latest
+
+# ─────────────────────────────────────────────────────────────
+# STAGE 4-6: Deploy (Dev, Staging, Production)
+# TODO: abilitare quando Docker stage funziona
+# ─────────────────────────────────────────────────────────────
+# - stage: Deploy_Dev
+#   ...
+# - stage: Deploy_Staging
+#   ...
+# - stage: Deploy_Prod
+#   ...

@@ -1,18 +1,14 @@
 namespace PlatformAI.Infrastructure.DTO;
 
-public class ProductionDataDTO 
-    {
-        public ProductionDataDTO()
-        {
-        
-        }
-        public string Id {get;set;}
-        public string MachineId { get; set; }
-        public string ProductionOrderId { get; set; }
-        public DateTime Timestamp { get; set; }
-        public float QuantityProduced { get; set; }
-        public float ScrapQuantity { get; set; }
-        public float CycleTime { get; set; }
-        public float EnergyConsumption { get; set; }
-        public float Temperature { get; set; }
-    }
+public class ProductionDataDTO
+{
+    public string Id { get; set; } = string.Empty;
+    public string MachineId { get; set; } = string.Empty;
+    public string ProductionOrderId { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+
+    /// <summary>
+    /// Metriche inviate dalla macchina (chiave/valore liberi, es. "quantity_produced", "temperature").
+    /// </summary>
+    public Dictionary<string, decimal> Metrics { get; set; } = new();
+}

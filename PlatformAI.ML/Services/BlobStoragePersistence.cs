@@ -15,11 +15,11 @@ public class BlobStoragePersistence
     private readonly ILogger<TrainingService> _logger;
     private const string containerName = "models";
     private readonly MLContext _mlContext;
-    public BlobStoragePersistence(MLContext mlContext, ILogger<TrainingService>? logger = null)
+    public BlobStoragePersistence(MLContext mlContext, string blobConnectionString, ILogger<TrainingService>? logger = null)
     {
         _mlContext = mlContext;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<TrainingService>.Instance;
-        _containerClient = new BlobContainerClient(Constants.BlobConnectionString, containerName);
+        _containerClient = new BlobContainerClient(blobConnectionString, containerName);
         _containerClient.CreateIfNotExists(PublicAccessType.None);
     }
 

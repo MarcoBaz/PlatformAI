@@ -1,0 +1,42 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/publish/
+
+# Node
+**/node_modules/
+platformAI-ui/dist/
+
+# Test results
+**/TestResults/
+**/coverage/
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+**/.DS_Store
+**/Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docs
+Docs/
+README.md
+docs/
+
+# SDK version pin (solo per sviluppo locale, non Docker)
+global.json
+
+# Scripts & CI (non necessari nell'immagine)
+scripts/
+deploy.sh
+.azuredevops/
+infra/
+
+# Secrets (mai nel container)
+**/appsettings.Development.json
+**/appsettings.*.json
+!**/appsettings.json
