@@ -84,7 +84,7 @@ stages:
 
     - script: |
         cd $(angularProject)
-        npm ci --prefer-offline
+        npm ci --prefer-offline --legacy-peer-deps
       displayName: 'npm ci'
 
     - script: |
