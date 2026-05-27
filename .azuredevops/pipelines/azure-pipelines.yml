@@ -152,7 +152,7 @@ stages:
         arguments: >
           --configuration $(buildConfiguration)
           --no-build
-          --filter "cat != Integration"
+          --filter "Category!=Integration"
           --logger "trx;LogFileName=test-results.trx"
           /p:CollectCoverage=true
           /p:CoverletOutputFormat=opencover
