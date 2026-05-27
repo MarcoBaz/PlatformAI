@@ -1,9 +1,5 @@
 {
   "dotnet.defaultSolution": "PlatformAI.sln",
-  "omnisharp.enableRoslynAnalyzers": true,
-  "omnisharp.useModernNet": true,
-  "dotnet-test-explorer.testProjectPath": "PlatformAi.Test/PlatformAi.Test.csproj",
-  "dotnet-test-explorer.autoWatch": false,
   "files.exclude": {
     "**/bin": true,
     "**/obj": true,

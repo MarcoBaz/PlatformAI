@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using NUnit.Framework;
 using PlatformAI.Core.Logic;
 using PlatformAI.Core.Services;
 using PlatformAI.Core.Settings;
@@ -19,7 +18,7 @@ using System.IO;
 
 namespace PlatformAI.Tests;
 
-public abstract class BaseTest
+public abstract class BaseTest : IDisposable
 {
     protected ServiceProvider _serviceProvider = null!;
     protected ApplicationContext _appContext = null!;
@@ -33,11 +32,7 @@ public abstract class BaseTest
 
     protected string tenantCode = "TENANT-001";
 
-    // Esempio di servizio da mockare
-    //protected Mock<IMyAiService> AiServiceMock = new();
-
-    [SetUp]
-    public void Setup()
+    protected BaseTest()
     {
         // Carica la configurazione da appsettings.json
         _configuration = new ConfigurationBuilder()
@@ -56,7 +51,7 @@ public abstract class BaseTest
         // Registra IConfiguration nel container DI (richiesto da TrainingService e altri)
         services.AddSingleton<IConfiguration>(_configuration);
 
-        // Connection strings: presi da variabili d'ambiente (locale: .env, CI: Azure DevOps secret vars)
+        // Connection strings: presi da variabili d'ambiente (locale: .runsettings, CI: Azure DevOps secret vars)
         // MAI hardcoded in questo file — usa le var d'ambiente o appsettings.Development.json
         string MasterDatabase =
             Environment.GetEnvironmentVariable("TEST_MASTER_DB")
@@ -73,9 +68,6 @@ public abstract class BaseTest
         services.AddDbContext<MasterContext>(options => options.UseSqlServer(MasterDatabase));
         services.AddDbContext<ApplicationContext>(options =>
             options.UseSqlServer(ApplicationDatabase)
-                   // Sopprime il warning "PendingModelChanges" durante i test:
-                   // il modello può avere modifiche non ancora migrate (migration da generare),
-                   // ma in ambiente di test applichiamo comunque le migration esistenti.
                    .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
         // Registrazione DbContextResolver con i context iniettati
@@ -106,7 +98,13 @@ public abstract class BaseTest
         };
         services.AddSingleton(Options.Create(jwtSettings));
 
-        services.AddLogging();
+        services.AddLogging(builder =>
+        {
+            builder.ClearProviders();
+            builder.AddConsole();
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
+
         services.AddTransient<TrainingService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IAuthService, AuthService>();
@@ -114,8 +112,6 @@ public abstract class BaseTest
 
         services.AddScoped<UserLogic>();
         services.AddScoped<ConversationLogic>();
-        // Registrazione del servizio mock
-        // services.AddSingleton<IMyAiService>(AiServiceMock.Object);
 
         _serviceProvider = services.BuildServiceProvider();
 
@@ -123,25 +119,16 @@ public abstract class BaseTest
         _masterContext = _serviceProvider.GetRequiredService<MasterContext>();
 
         // Applica automaticamente le migrazioni pendenti sul DB di test
-        // (es. FlexibleProductionDataMetrics che aggiunge la colonna Metrics)
         _appContext.Database.Migrate();
 
         _uow = _serviceProvider.GetRequiredService<IUnitOfWork>();
         _authService = _serviceProvider.GetRequiredService<IAuthService>();
         _conversationLogic = _serviceProvider.GetRequiredService<ConversationLogic>();
-
-        services.AddLogging(builder =>
-            {
-                builder.ClearProviders();         // 🔥 Importante
-                builder.AddConsole();             // Output su console reale
-                builder.SetMinimumLevel(LogLevel.Debug);
-            });
         _logger = _serviceProvider.GetRequiredService<ILogger<TrainingService>>();
     }
 
     protected void SeedData<T>(params T[] entities) where T : Entity
     {
-        // Determina il context corretto in base al namespace dell'entità
         if (typeof(T).Namespace?.Contains("Master") == true)
         {
             _masterContext.Set<T>().AddRange(entities);
@@ -154,17 +141,14 @@ public abstract class BaseTest
         }
     }
 
-    [TearDown]
-    public void TearDown()
+    public virtual void Dispose()
     {
-        //_appContext?.Database.EnsureDeleted();
-        _appContext?.Dispose();
-        //_masterContext?.Database.EnsureDeleted();
-        _masterContext?.Dispose();
+        // Let the service provider dispose all DI-managed objects (contexts, UoW, etc.)
+        // Do NOT dispose _appContext, _masterContext, or _uow directly — they are owned
+        // by the container. Disposing them first causes ObjectDisposedException when the
+        // service provider then tries to dispose UnitOfWork (which accesses those contexts).
         _serviceProvider?.Dispose();
-        _uow?.Dispose();
     }
-
 
     /// <summary>
     /// Trova la root del progetto (dove si trova la solution)
@@ -173,7 +157,6 @@ public abstract class BaseTest
     {
         var currentDir = Directory.GetCurrentDirectory();
 
-        // Cerca la directory che contiene PlatformAI.sln o la cartella PlatformAI
         while (currentDir != null)
         {
             if (File.Exists(Path.Combine(currentDir, "PlatformAI.sln")) ||
@@ -184,7 +167,6 @@ public abstract class BaseTest
             currentDir = Directory.GetParent(currentDir)?.FullName;
         }
 
-        // Fallback: prova percorsi comuni
         var possiblePaths = new[]
         {
             Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".."),
@@ -204,4 +186,3 @@ public abstract class BaseTest
         throw new DirectoryNotFoundException("Cannot find project root directory");
     }
 }
-

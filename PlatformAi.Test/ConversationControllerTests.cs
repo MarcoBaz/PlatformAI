@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
-using NUnit.Framework;
+using Xunit;
 using PlatformAI.Controllers;
 using PlatformAI.Core.Logic;
 using PlatformAI.Core.Services;
@@ -23,92 +23,52 @@ namespace PlatformAI.Tests;
 /// <summary>
 /// Unit test per ConversationController - StreamConversation e SendConversation
 /// </summary>
-[TestFixture]
 public class ConversationControllerTests : BaseTest
 {
-    // Mock per LLMStreamingService (per controllare le risposte AI nei test)
     private Mock<LLMStreamingService> _mockLLMStreamingService = null!;
-    
-    // Controller sotto test
     private ConversationController _controller = null!;
-    
-    // Http context per testare SSE streaming
     private MemoryStream _responseBodyStream = null!;
     private DefaultHttpContext _httpContext = null!;
 
-    [SetUp]
-    public new void Setup()
+    public ConversationControllerTests() : base()
     {
-        // Chiama il Setup del BaseTest per inizializzare DB, UoW, servizi, ecc.
-        base.Setup();
-        
         // Setup HttpContext per testare le risposte SSE
-        SetupHttpContext();
-        
-        // Crea Mock per LLMStreamingService
-        SetupLLMStreamingServiceMock();
-        
-        // Crea il controller con DI
-        CreateController();
-    }
-
-    /// <summary>
-    /// Setup HttpContext per testare le risposte SSE streaming
-    /// </summary>
-    private void SetupHttpContext()
-    {
         _responseBodyStream = new MemoryStream();
         _httpContext = new DefaultHttpContext();
         _httpContext.Response.Body = _responseBodyStream;
-    }
 
-    /// <summary>
-    /// Crea Mock per LLMStreamingService (per controllare le risposte AI nei test)
-    /// </summary>
-    private void SetupLLMStreamingServiceMock()
-    {
-        // Usa _llmConfig caricato da appsettings.json (dal BaseTest)
+        // Crea Mock per LLMStreamingService
         var httpClient = new HttpClient();
         var llmLogger = _serviceProvider.GetRequiredService<ILogger<LLMStreamingService>>();
         _mockLLMStreamingService = new Mock<LLMStreamingService>(httpClient, llmLogger, _llmConfig);
-    }
 
-    /// <summary>
-    /// Crea il ConversationController con le dipendenze
-    /// </summary>
-    private void CreateController()
-    {
+        // Crea il controller con DI
         _controller = new ConversationController(
             _authService,
             _conversationLogic,
             _mockLLMStreamingService.Object
         );
 
-        // Assegna HttpContext al controller per testare SSE
         _controller.ControllerContext = new ControllerContext
         {
             HttpContext = _httpContext
         };
     }
 
-    [TearDown]
-    public new void TearDown()
+    public override void Dispose()
     {
         _responseBodyStream?.Dispose();
         _controller = null!;
-        
-        // Chiama TearDown del BaseTest
-        base.TearDown();
+        base.Dispose();
     }
 
     // ============================================================================
     // TEST: StreamConversation - Scenario di successo
     // ============================================================================
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_WithValidRequest_SendsSSEEvents()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
         var request = new StreamingRequest
@@ -118,7 +78,6 @@ public class ConversationControllerTests : BaseTest
             Message = "Ciao, come stai?"
         };
 
-        // Mock GenerateStreamingResponseAsync - simula streaming di chunks
         var chunks = new[] { "Ciao", "!", " Sto", " bene", ", grazie", "!" };
         _mockLLMStreamingService
             .Setup(x => x.GenerateStreamingResponseAsync(
@@ -127,36 +86,31 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateAsyncEnumerable(chunks));
 
-        // Act
         await _controller.StreamConversation(request, CancellationToken.None);
 
-        // Assert - Verifica headers SSE
-        Assert.That(_httpContext.Response.Headers["Content-Type"].ToString(), Is.EqualTo("text/event-stream"));
-        Assert.That(_httpContext.Response.Headers["Cache-Control"].ToString(), Is.EqualTo("no-cache"));
-        Assert.That(_httpContext.Response.Headers["Connection"].ToString(), Is.EqualTo("keep-alive"));
+        Assert.Equal("text/event-stream", _httpContext.Response.Headers["Content-Type"].ToString());
+        Assert.Equal("no-cache", _httpContext.Response.Headers["Cache-Control"].ToString());
+        Assert.Equal("keep-alive", _httpContext.Response.Headers["Connection"].ToString());
 
-        // Verifica che il body contenga gli eventi SSE
         _responseBodyStream.Position = 0;
         var responseContent = Encoding.UTF8.GetString(_responseBodyStream.ToArray());
 
-        Assert.That(responseContent, Does.Contain("event: start"));
-        Assert.That(responseContent, Does.Contain("event: chunk"));
-        Assert.That(responseContent, Does.Contain("event: complete"));
+        Assert.Contains("event: start", responseContent);
+        Assert.Contains("event: chunk", responseContent);
+        Assert.Contains("event: complete", responseContent);
 
-        // Verifica che tutti i chunks siano stati inviati
         foreach (var chunk in chunks)
         {
-            Assert.That(responseContent, Does.Contain(chunk));
+            Assert.Contains(chunk, responseContent);
         }
 
         Console.WriteLine($"✅ SSE Response received:");
         Console.WriteLine(responseContent);
     }
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_WithNewConversation_SavesUserMessage()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
         var request = new StreamingRequest
@@ -173,28 +127,25 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateAsyncEnumerable(new[] { "Risposta" }));
 
-        // Act
         await _controller.StreamConversation(request, CancellationToken.None);
 
-        // Assert - Verifica che la conversazione sia stata salvata nel DB
         var savedConversation = await _conversationLogic.GetAllConversationsAsync(userId);
-        Assert.That(savedConversation, Is.Not.Empty);
-        
+        Assert.NotEmpty(savedConversation);
+
         var conversation = savedConversation.FirstOrDefault(c => c.Id == conversationId.ToString());
-        Assert.That(conversation, Is.Not.Null);
-        Assert.That(conversation!.Messages, Has.Count.GreaterThanOrEqualTo(1));
-        
+        Assert.NotNull(conversation);
+        Assert.True(conversation!.Messages.Count >= 1);
+
         var userMessage = conversation.Messages.FirstOrDefault(m => !m.IsAnswer);
-        Assert.That(userMessage, Is.Not.Null);
-        Assert.That(userMessage!.Content, Is.EqualTo("Prima domanda della conversazione"));
+        Assert.NotNull(userMessage);
+        Assert.Equal("Prima domanda della conversazione", userMessage!.Content);
 
         Console.WriteLine($"✅ User message saved: {userMessage.Content}");
     }
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_SavesAIResponseAfterStreaming()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
         var request = new StreamingRequest
@@ -212,36 +163,32 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateAsyncEnumerable(aiResponseChunks));
 
-        // Act
         await _controller.StreamConversation(request, CancellationToken.None);
 
-        // Assert - Verifica che siano stati salvati 2 messaggi (user + AI) nel DB
         var savedConversations = await _conversationLogic.GetAllConversationsAsync(userId);
         var conversation = savedConversations.FirstOrDefault(c => c.Id == conversationId.ToString());
-        
-        Assert.That(conversation, Is.Not.Null);
-        Assert.That(conversation!.Messages.Count, Is.EqualTo(2));
+
+        Assert.NotNull(conversation);
+        Assert.Equal(2, conversation!.Messages.Count);
 
         var userMessage = conversation.Messages.FirstOrDefault(m => !m.IsAnswer);
         var aiMessage = conversation.Messages.FirstOrDefault(m => m.IsAnswer);
 
-        Assert.That(userMessage, Is.Not.Null);
-        Assert.That(userMessage!.Content, Is.EqualTo("Qual è la capitale d'Italia?"));
+        Assert.NotNull(userMessage);
+        Assert.Equal("Qual è la capitale d'Italia?", userMessage!.Content);
 
-        Assert.That(aiMessage, Is.Not.Null);
-        Assert.That(aiMessage!.Content, Is.EqualTo("La capitale d'Italia è Roma."));
+        Assert.NotNull(aiMessage);
+        Assert.Equal("La capitale d'Italia è Roma.", aiMessage!.Content);
 
         Console.WriteLine($"✅ AI response saved: {aiMessage.Content}");
     }
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_WithConversationHistory_BuildsCorrectContext()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
-        
-        // Prima crea una conversazione con storia
+
         var firstRequest = new StreamingRequest
         {
             UserId = userId.ToString(),
@@ -258,11 +205,9 @@ public class ConversationControllerTests : BaseTest
 
         await _controller.StreamConversation(firstRequest, CancellationToken.None);
 
-        // Reset response stream per il secondo messaggio
         _responseBodyStream = new MemoryStream();
         _httpContext.Response.Body = _responseBodyStream;
 
-        // Secondo messaggio
         var secondRequest = new StreamingRequest
         {
             UserId = userId.ToString(),
@@ -279,12 +224,10 @@ public class ConversationControllerTests : BaseTest
             .Callback<string, List<ChatMessage>, CancellationToken>((msg, history, ct) => capturedHistory = history)
             .Returns(CreateAsyncEnumerable(new[] { "Milano" }));
 
-        // Act
         await _controller.StreamConversation(secondRequest, CancellationToken.None);
 
-        // Assert - Verifica che la storia sia stata passata correttamente
-        Assert.That(capturedHistory, Is.Not.Null);
-        Assert.That(capturedHistory!.Count, Is.GreaterThanOrEqualTo(2));
+        Assert.NotNull(capturedHistory);
+        Assert.True(capturedHistory!.Count >= 2);
 
         Console.WriteLine($"✅ Conversation history passed correctly: {capturedHistory.Count} messages");
     }
@@ -293,10 +236,9 @@ public class ConversationControllerTests : BaseTest
     // TEST: StreamConversation - Gestione Errori
     // ============================================================================
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_OnCancellation_SendsCancelledEvent()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var request = new StreamingRequest
         {
@@ -307,7 +249,6 @@ public class ConversationControllerTests : BaseTest
 
         var cts = new CancellationTokenSource();
 
-        // Simula streaming che viene cancellato
         _mockLLMStreamingService
             .Setup(x => x.GenerateStreamingResponseAsync(
                 It.IsAny<string>(),
@@ -315,23 +256,20 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateCancellableAsyncEnumerable(cts));
 
-        // Act - Cancella dopo un po'
         cts.Cancel();
         await _controller.StreamConversation(request, cts.Token);
 
-        // Assert
         _responseBodyStream.Position = 0;
         var responseContent = Encoding.UTF8.GetString(_responseBodyStream.ToArray());
 
-        Assert.That(responseContent, Does.Contain("event: cancelled").Or.Contain("event: start"));
+        Assert.True(responseContent.Contains("event: cancelled") || responseContent.Contains("event: start"));
 
         Console.WriteLine($"✅ Cancellation handled correctly");
     }
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_OnException_SendsErrorEvent()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var request = new StreamingRequest
         {
@@ -340,7 +278,6 @@ public class ConversationControllerTests : BaseTest
             Message = "Test error"
         };
 
-        // Simula un errore durante lo streaming
         _mockLLMStreamingService
             .Setup(x => x.GenerateStreamingResponseAsync(
                 It.IsAny<string>(),
@@ -348,30 +285,27 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateErrorAsyncEnumerable("LLM service unavailable"));
 
-        // Act
         await _controller.StreamConversation(request, CancellationToken.None);
 
-        // Assert
         _responseBodyStream.Position = 0;
         var responseContent = Encoding.UTF8.GetString(_responseBodyStream.ToArray());
 
-        Assert.That(responseContent, Does.Contain("event: error"));
-        Assert.That(responseContent, Does.Contain("LLM service unavailable"));
+        Assert.Contains("event: error", responseContent);
+        Assert.Contains("LLM service unavailable", responseContent);
 
         Console.WriteLine($"✅ Error event sent:");
         Console.WriteLine(responseContent);
     }
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_WithEmptyMessage_StillProcesses()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var request = new StreamingRequest
         {
             UserId = userId.ToString(),
             ConversationId = Guid.NewGuid().ToString(),
-            Message = "" // Messaggio vuoto
+            Message = ""
         };
 
         _mockLLMStreamingService
@@ -381,14 +315,12 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateAsyncEnumerable(new[] { "Response to empty" }));
 
-        // Act
         await _controller.StreamConversation(request, CancellationToken.None);
 
-        // Assert - Il controller dovrebbe comunque processare
         _responseBodyStream.Position = 0;
         var responseContent = Encoding.UTF8.GetString(_responseBodyStream.ToArray());
 
-        Assert.That(responseContent, Does.Contain("event: start"));
+        Assert.Contains("event: start", responseContent);
 
         Console.WriteLine($"✅ Empty message handled");
     }
@@ -397,10 +329,9 @@ public class ConversationControllerTests : BaseTest
     // TEST: Verifica formato SSE
     // ============================================================================
 
-    [Test]
+    [Fact]
     public async Task StreamConversation_SSEFormat_IsCorrect()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var request = new StreamingRequest
         {
@@ -416,32 +347,27 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .Returns(CreateAsyncEnumerable(new[] { "Hello" }));
 
-        // Act
         await _controller.StreamConversation(request, CancellationToken.None);
 
-        // Assert - Verifica formato SSE corretto
         _responseBodyStream.Position = 0;
         var responseContent = Encoding.UTF8.GetString(_responseBodyStream.ToArray());
 
-        // SSE format: "event: {type}\ndata: {json}\n\n"
         var lines = responseContent.Split('\n');
-        
-        // Verifica che ci siano coppie event/data
+
         bool foundEventDataPair = false;
         for (int i = 0; i < lines.Length - 1; i++)
         {
             if (lines[i].StartsWith("event:") && lines[i + 1].StartsWith("data:"))
             {
                 foundEventDataPair = true;
-                
-                // Verifica che il data sia JSON valido
-                var jsonData = lines[i + 1].Substring(5).Trim(); // Rimuovi "data:"
-                Assert.DoesNotThrow(() => System.Text.Json.JsonDocument.Parse(jsonData),
-                    $"Invalid JSON in SSE data: {jsonData}");
+
+                var jsonData = lines[i + 1].Substring(5).Trim();
+                var ex = Record.Exception(() => System.Text.Json.JsonDocument.Parse(jsonData));
+                Assert.Null(ex);
             }
         }
 
-        Assert.That(foundEventDataPair, Is.True, "Should have event/data pairs in SSE format");
+        Assert.True(foundEventDataPair, "Should have event/data pairs in SSE format");
 
         Console.WriteLine($"✅ SSE format is correct");
     }
@@ -450,10 +376,9 @@ public class ConversationControllerTests : BaseTest
     // TEST: SendConversation - Endpoint non-streaming
     // ============================================================================
 
-    [Test]
+    [Fact]
     public async Task SendConversation_WithValidRequest_ReturnsOkWithCompleteResponse()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
         var request = new StreamingRequest
@@ -463,7 +388,6 @@ public class ConversationControllerTests : BaseTest
             Message = "Qual è la capitale della Francia?"
         };
 
-        // Mock GenerateCompleteResponseAsync - restituisce la risposta completa
         _mockLLMStreamingService
             .Setup(x => x.GenerateCompleteResponseAsync(
                 It.IsAny<string>(),
@@ -471,26 +395,23 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync("La capitale della Francia è Parigi.");
 
-        // Act
         var result = await _controller.SendConversation(request, CancellationToken.None);
 
-        // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.IsType<OkObjectResult>(result);
         var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.InstanceOf<ConversationResponse>());
+        Assert.IsType<ConversationResponse>(okResult.Value);
 
         var response = (ConversationResponse)okResult.Value!;
-        Assert.That(response.ConversationId, Is.EqualTo(conversationId.ToString()));
-        Assert.That(response.Content, Is.EqualTo("La capitale della Francia è Parigi."));
-        Assert.That(response.MessageId, Is.Not.Empty);
+        Assert.Equal(conversationId.ToString(), response.ConversationId);
+        Assert.Equal("La capitale della Francia è Parigi.", response.Content);
+        Assert.NotEmpty(response.MessageId);
 
         Console.WriteLine($"✅ SendConversation returned complete response: {response.Content}");
     }
 
-    [Test]
+    [Fact]
     public async Task SendConversation_SavesBothUserAndAIMessages()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
         var request = new StreamingRequest
@@ -507,33 +428,29 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync("Ciao! Come posso aiutarti?");
 
-        // Act
         await _controller.SendConversation(request, CancellationToken.None);
 
-        // Assert - Verifica che siano stati salvati 2 messaggi nel DB
         var savedConversations = await _conversationLogic.GetAllConversationsAsync(userId);
         var conversation = savedConversations.FirstOrDefault(c => c.Id == conversationId.ToString());
-        
-        Assert.That(conversation, Is.Not.Null);
-        Assert.That(conversation!.Messages.Count, Is.EqualTo(2));
+
+        Assert.NotNull(conversation);
+        Assert.Equal(2, conversation!.Messages.Count);
 
         var userMsg = conversation.Messages.FirstOrDefault(m => !m.IsAnswer);
         var aiMsg = conversation.Messages.FirstOrDefault(m => m.IsAnswer);
 
-        Assert.That(userMsg!.Content, Is.EqualTo("Ciao!"));
-        Assert.That(aiMsg!.Content, Is.EqualTo("Ciao! Come posso aiutarti?"));
+        Assert.Equal("Ciao!", userMsg!.Content);
+        Assert.Equal("Ciao! Come posso aiutarti?", aiMsg!.Content);
 
         Console.WriteLine($"✅ Both messages saved - User: '{userMsg.Content}', AI: '{aiMsg.Content}'");
     }
 
-    [Test]
+    [Fact]
     public async Task SendConversation_WithConversationHistory_PassesContextToLLM()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
-        
-        // Prima domanda
+
         var firstRequest = new StreamingRequest
         {
             UserId = userId.ToString(),
@@ -550,7 +467,6 @@ public class ConversationControllerTests : BaseTest
 
         await _controller.SendConversation(firstRequest, CancellationToken.None);
 
-        // Seconda domanda
         var secondRequest = new StreamingRequest
         {
             UserId = userId.ToString(),
@@ -568,20 +484,17 @@ public class ConversationControllerTests : BaseTest
             .Callback<string, List<ChatMessage>, CancellationToken>((msg, history, ct) => capturedHistory = history)
             .ReturnsAsync("Marsiglia");
 
-        // Act
         await _controller.SendConversation(secondRequest, CancellationToken.None);
 
-        // Assert
-        Assert.That(capturedHistory, Is.Not.Null);
-        Assert.That(capturedHistory!.Count, Is.GreaterThanOrEqualTo(2));
+        Assert.NotNull(capturedHistory);
+        Assert.True(capturedHistory!.Count >= 2);
 
         Console.WriteLine($"✅ Conversation history passed: {capturedHistory.Count} messages");
     }
 
-    [Test]
+    [Fact]
     public async Task SendConversation_OnCancellation_Returns499()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var request = new StreamingRequest
         {
@@ -591,7 +504,7 @@ public class ConversationControllerTests : BaseTest
         };
 
         var cts = new CancellationTokenSource();
-        cts.Cancel(); // Cancella immediatamente
+        cts.Cancel();
 
         _mockLLMStreamingService
             .Setup(x => x.GenerateCompleteResponseAsync(
@@ -600,21 +513,18 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());
 
-        // Act
         var result = await _controller.SendConversation(request, cts.Token);
 
-        // Assert
-        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.IsType<ObjectResult>(result);
         var objectResult = (ObjectResult)result;
-        Assert.That(objectResult.StatusCode, Is.EqualTo(499));
+        Assert.Equal(499, objectResult.StatusCode);
 
         Console.WriteLine($"✅ Cancellation returns 499 status code");
     }
 
-    [Test]
+    [Fact]
     public async Task SendConversation_OnException_Returns500WithErrorMessage()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var request = new StreamingRequest
         {
@@ -630,21 +540,18 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("LLM service unavailable"));
 
-        // Act
         var result = await _controller.SendConversation(request, CancellationToken.None);
 
-        // Assert
-        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.IsType<ObjectResult>(result);
         var objectResult = (ObjectResult)result;
-        Assert.That(objectResult.StatusCode, Is.EqualTo(500));
+        Assert.Equal(500, objectResult.StatusCode);
 
         Console.WriteLine($"✅ Exception returns 500 status code");
     }
 
-    [Test]
+    [Fact]
     public async Task SendConversation_ReturnsUpdatedConversationWithAllMessages()
     {
-        // Arrange
         var userId = Guid.Parse("b267adf9-6fcc-f011-8195-000d3a4749b7");
         var conversationId = Guid.NewGuid();
         var request = new StreamingRequest
@@ -661,15 +568,13 @@ public class ConversationControllerTests : BaseTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync("Risposta completa");
 
-        // Act
         var result = await _controller.SendConversation(request, CancellationToken.None);
 
-        // Assert
         var okResult = (OkObjectResult)result;
         var response = (ConversationResponse)okResult.Value!;
 
-        Assert.That(response.Conversation, Is.Not.Null);
-        Assert.That(response.Conversation!.Messages.Count, Is.EqualTo(2));
+        Assert.NotNull(response.Conversation);
+        Assert.Equal(2, response.Conversation!.Messages.Count);
 
         Console.WriteLine($"✅ Response includes updated conversation with {response.Conversation.Messages.Count} messages");
     }
@@ -678,21 +583,15 @@ public class ConversationControllerTests : BaseTest
     // HELPER METHODS
     // ============================================================================
 
-    /// <summary>
-    /// Crea un IAsyncEnumerable simulato per i test
-    /// </summary>
     private static async IAsyncEnumerable<string> CreateAsyncEnumerable(string[] items)
     {
         foreach (var item in items)
         {
-            await Task.Delay(1); // Simula latenza minima
+            await Task.Delay(1);
             yield return item;
         }
     }
 
-    /// <summary>
-    /// Crea un IAsyncEnumerable che viene cancellato
-    /// </summary>
     private static async IAsyncEnumerable<string> CreateCancellableAsyncEnumerable(
         CancellationTokenSource cts,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -708,14 +607,11 @@ public class ConversationControllerTests : BaseTest
         }
     }
 
-    /// <summary>
-    /// Crea un IAsyncEnumerable che genera un errore
-    /// </summary>
     private static async IAsyncEnumerable<string> CreateErrorAsyncEnumerable(string errorMessage)
     {
         await Task.Delay(1);
         throw new Exception(errorMessage);
-        #pragma warning disable CS0162 // Unreachable code
+        #pragma warning disable CS0162
         yield break;
         #pragma warning restore CS0162
     }
