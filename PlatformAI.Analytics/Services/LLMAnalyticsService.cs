@@ -631,6 +631,8 @@ public class LLMAnalyticsService
                 x.Timestamp <= endDate)
                 .OrderBy(x => x.Timestamp)
                 .Include(x => x.Machine)
+                .Include(x => x.Metrics)
+                .ThenInclude(m => m.MetricType)
                 .ToList();
 
             if (!data.Any())
@@ -702,6 +704,8 @@ public class LLMAnalyticsService
             // Recupera gli ultimi dati per calcolare le features
             var recentData = repo.Query(x =>
                 x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code)
+                .Include(x => x.Metrics)
+                .ThenInclude(m => m.MetricType)
                 .OrderByDescending(x => x.Timestamp)
                 .Take(10)
                 .ToList();
@@ -786,6 +790,8 @@ public class LLMAnalyticsService
             // Recupera gli ultimi dati per costruire le features
             var recentData = repo.Query(x =>
                 x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code)
+                .Include(x => x.Metrics)
+                .ThenInclude(m => m.MetricType)
                 .OrderByDescending(x => x.Timestamp)
                 .Take(10)
                 .ToList();
@@ -1223,6 +1229,8 @@ public class LLMAnalyticsService
                 x.Machine.ProductionLine.Department.TenantCode == tenantCode &&
                 x.Timestamp >= startDate &&
                 x.Timestamp <= endDate)
+                .Include(x => x.Metrics)
+                .ThenInclude(m => m.MetricType)
                 .OrderBy(x => x.Timestamp)
                 .ToList();
 

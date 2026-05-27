@@ -15,34 +15,22 @@ public class ApplicationContext : DbContext, IAppDbContext
     public DbSet<ProductionOrder> ProductionOrders => Set<ProductionOrder>();
     public DbSet<MachineEvent> MachineEvents => Set<MachineEvent>();
     public DbSet<Log> Logs => Set<Log>();
-     public DbSet<Conversation> Conversations => Set<Conversation>();
-    //public DbSet<Device> Devices { get; set; }
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<MetricType> MetricTypes => Set<MetricType>();
+    public DbSet<ProductionDataMetric> ProductionDataMetrics => Set<ProductionDataMetric>();
 
-    public ApplicationContext()
-    {
+    public ApplicationContext() { }
 
-    }
     public ApplicationContext(DbContextOptions<ApplicationContext> options) : base(options) { }
-    // The following configures EF to create a Sqlite database file in the
-    // special "local" folder for your platform.
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        // if (CommonConstants.DbMasterPath == null)
-        // {
-        //    Configuration.SetConfiguration(CommonConstants.GlobalConfigurationType); 
-        // }//BTCMasterTest BTCMasterSandbox
-        // //CommonConstants.DbMasterPath ="Server=tcp:b2aserver.database.windows.net,1433;Initial Catalog=BTCMasterTest;Persist Security Info=False;User ID=B2Administrator;Password=B24dm1n1strator;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-        // optionsBuilder.UseSqlServer(CommonConstants.DbMasterPath);
-        //.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        /*mappatura della chiave primaria autogenerata */
+        // Mappatura chiave primaria autogenerata per tutte le entità che ereditano da BaseEntity
         var baseType = typeof(BaseEntity);
-
         var entityTypes = modelBuilder.Model
             .GetEntityTypes()
             .Where(t => baseType.IsAssignableFrom(t.ClrType) && t.ClrType != baseType)
@@ -54,20 +42,26 @@ public class ApplicationContext : DbContext, IAppDbContext
                 .Property(nameof(BaseEntity.Id))
                 .HasDefaultValueSql("NEWSEQUENTIALID()");
         }
-        /* fine mappatura */
-        modelBuilder.Entity<Machine>()
-               .HasOne(p => p.ProductionLine)
-               .WithMany()
-               .HasForeignKey(p => p.ProductionLineId)
-               .OnDelete(DeleteBehavior.Restrict);
 
-        // Serializza il dizionario Metrics come JSON su una colonna nvarchar(max)
-        modelBuilder.Entity<ProductionData>()
-            .Property(e => e.Metrics)
-            .HasConversion(
-                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new Dictionary<string, decimal>()
-            )
-            .HasColumnType("nvarchar(max)");
+        // Machine → ProductionLine (Restrict per evitare cascade delete multipli)
+        modelBuilder.Entity<Machine>()
+            .HasOne(p => p.ProductionLine)
+            .WithMany()
+            .HasForeignKey(p => p.ProductionLineId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ProductionDataMetric → ProductionData
+        modelBuilder.Entity<ProductionDataMetric>()
+            .HasOne(m => m.ProductionData)
+            .WithMany(pd => pd.Metrics)
+            .HasForeignKey(m => m.ProductionDataId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // ProductionDataMetric → MetricType
+        modelBuilder.Entity<ProductionDataMetric>()
+            .HasOne(m => m.MetricType)
+            .WithMany(mt => mt.ProductionDataMetrics)
+            .HasForeignKey(m => m.MetricTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -70,7 +71,12 @@ public abstract class BaseTest
                 "Connection string 'TEST_APP_DB' (env var) or 'ConnectionStrings:ApplicationDatabase' (appsettings) is required.");
 
         services.AddDbContext<MasterContext>(options => options.UseSqlServer(MasterDatabase));
-        services.AddDbContext<ApplicationContext>(options => options.UseSqlServer(ApplicationDatabase));
+        services.AddDbContext<ApplicationContext>(options =>
+            options.UseSqlServer(ApplicationDatabase)
+                   // Sopprime il warning "PendingModelChanges" durante i test:
+                   // il modello può avere modifiche non ancora migrate (migration da generare),
+                   // ma in ambiente di test applichiamo comunque le migration esistenti.
+                   .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
         // Registrazione DbContextResolver con i context iniettati
         services.AddScoped<IDbContextResolver>(sp =>

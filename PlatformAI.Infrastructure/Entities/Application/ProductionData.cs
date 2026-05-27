@@ -13,15 +13,15 @@ public class ProductionData : Entity
     public DateTime Timestamp { get; set; }
 
     /// <summary>
-    /// Metriche flessibili inviate dalla macchina (es. "quantity_produced", "temperature", "flow_rate", ...).
-    /// Ogni costruttore può definire le proprie chiavi; i valori sono sempre decimali.
-    /// Serializzato come JSON su DB tramite value converter EF Core.
+    /// Valori delle metriche associate a questo record di produzione.
+    /// Ogni metrica è definita in MetricType (es. Temperature, QuantityProduced, ...).
     /// </summary>
-    public Dictionary<string, decimal> Metrics { get; set; } = new();
+    public ICollection<ProductionDataMetric> Metrics { get; set; } = new List<ProductionDataMetric>();
 
     /// <summary>
-    /// Legge una metrica per chiave. Restituisce defaultValue se la chiave non è presente.
+    /// Legge il valore di una metrica per nome. Restituisce defaultValue se non presente.
+    /// Richiede che Metrics e MetricType siano caricati (Include).
     /// </summary>
-    public decimal GetMetric(string key, decimal defaultValue = 0)
-        => Metrics.TryGetValue(key, out var v) ? v : defaultValue;
+    public decimal GetMetric(string metricTypeName, decimal defaultValue = 0)
+        => Metrics.FirstOrDefault(m => m.MetricType?.Name == metricTypeName)?.Value ?? defaultValue;
 }

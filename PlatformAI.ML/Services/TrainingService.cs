@@ -232,6 +232,8 @@ public class TrainingService
             .Include(x => x.Machine)
             .ThenInclude(m => m.ProductionLine)
             .ThenInclude(pl => pl.Department)
+            .Include(x => x.Metrics)
+            .ThenInclude(m => m.MetricType)
             .AsQueryable();
             // solo dati nuovi rispetto al checkpoint
 
@@ -259,9 +261,12 @@ public class TrainingService
             x.LastModifiedDate > historicalCutoff &&
             x.LastModifiedDate <= beforeDate);
 
-        var list = query.OrderBy(x => x.LastModifiedDate)
-                        .Take(cfg.MaxHistoricalRecords)   // cap per non sovraccaricare la memoria
-                        .ToList();
+        var list = query
+            .Include(x => x.Metrics)
+            .ThenInclude(m => m.MetricType)
+            .OrderBy(x => x.LastModifiedDate)
+            .Take(cfg.MaxHistoricalRecords)   // cap per non sovraccaricare la memoria
+            .ToList();
 
         return list;
     }

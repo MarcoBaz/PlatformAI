@@ -87,6 +87,24 @@ public class SeedDataService
             };
             await _uow.Repository<ProductionOrder>().AddAsync(order);
 
+            // Carica i MetricType dal DB (creati dalla migrazione RelationalMetrics)
+            var metricTypes = await _uow.Repository<MetricType>().ListAsync();
+            var mtDict = metricTypes.ToDictionary(m => m.Name);
+
+            // Helper: restituisce il MetricType per nome o lancia un'eccezione chiara
+            MetricType GetMT(string name) =>
+                mtDict.TryGetValue(name, out var mt)
+                    ? mt
+                    : throw new InvalidOperationException(
+                        $"MetricType '{name}' non trovato nel DB. " +
+                        "Assicurarsi che la migrazione RelationalMetrics sia stata applicata.");
+
+            var mtQty    = GetMT("quantity_produced");
+            var mtScrap  = GetMT("scrap_quantity");
+            var mtCycle  = GetMT("cycle_time");
+            var mtEnergy = GetMT("energy_consumption");
+            var mtTemp   = GetMT("temperature");
+
             int pdCount = 0;
             int evCount = 0;
 
@@ -117,21 +135,23 @@ public class SeedDataService
                 for (int slot = 1; slot <= 15; slot++)
                 {
                     var ts = startTime.AddMinutes(slot * 30);
-                    await _uow.Repository<ProductionData>().AddAsync(new ProductionData
+                    var pdId = Guid.NewGuid();
+                    var pd = new ProductionData
                     {
-                        Id                = Guid.NewGuid(),
+                        Id                = pdId,
                         MachineId         = machine.Id,
                         ProductionOrderId = order.Id,
                         Timestamp         = ts,
-                        Metrics = new Dictionary<string, decimal>
+                        Metrics = new List<ProductionDataMetric>
                         {
-                            ["quantity_produced"]  = _rng.Next(80, 121),
-                            ["scrap_quantity"]     = _rng.Next(0, 6),
-                            ["cycle_time"]         = Math.Round((decimal)(1.5 + _rng.NextDouble() * 2.0), 2),
-                            ["energy_consumption"] = Math.Round((decimal)(80.0 + _rng.NextDouble() * 40.0), 1),
-                            ["temperature"]        = Math.Round((decimal)(35.0 + _rng.NextDouble() * 20.0), 1),
+                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtQty.Id,    Value = _rng.Next(80, 121) },
+                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtScrap.Id,  Value = _rng.Next(0, 6) },
+                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtCycle.Id,  Value = Math.Round((decimal)(1.5 + _rng.NextDouble() * 2.0), 2) },
+                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtEnergy.Id, Value = Math.Round((decimal)(80.0 + _rng.NextDouble() * 40.0), 1) },
+                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtTemp.Id,   Value = Math.Round((decimal)(35.0 + _rng.NextDouble() * 20.0), 1) },
                         }
-                    });
+                    };
+                    await _uow.Repository<ProductionData>().AddAsync(pd);
                     pdCount++;
                 }
             }
