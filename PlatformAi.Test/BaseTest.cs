@@ -159,13 +159,14 @@ public abstract class BaseTest
         _uow?.Dispose();
     }
 
+
     /// <summary>
     /// Trova la root del progetto (dove si trova la solution)
     /// </summary>
     protected string GetProjectRootPath()
     {
         var currentDir = Directory.GetCurrentDirectory();
-        
+
         // Cerca la directory che contiene PlatformAI.sln o la cartella PlatformAI
         while (currentDir != null)
         {
