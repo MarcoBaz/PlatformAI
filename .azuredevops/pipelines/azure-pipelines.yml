@@ -135,13 +135,14 @@ stages:
       inputs:
         command: 'restore'
         projects: $(solutionFile)
+        arguments: '-r linux-x64'
 
     - task: DotNetCoreCLI@2
       displayName: 'dotnet build'
       inputs:
         command: 'build'
         projects: $(solutionFile)
-        arguments: '--configuration $(buildConfiguration) --no-restore'
+        arguments: '--configuration $(buildConfiguration) --no-restore -r linux-x64'
 
     # ── Unit Tests + Coverage ──────────────────────────────
     - task: DotNetCoreCLI@2
