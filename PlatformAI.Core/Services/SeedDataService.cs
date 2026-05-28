@@ -28,11 +28,11 @@ public class SeedDataService
     ///  - 2 MachineEvent (START/STOP) per ogni macchina della linea
     ///  - 15 ProductionData ogni 30 minuti per ogni macchina
     /// </summary>
-    public async Task<SeedDataResult> SeedProductionDataAsync( string lineName = "Linea A", int daysAgo = 1, CancellationToken ct = default)
+    public async Task<SeedDataResult> SeedProductionDataAsync(string lineName = "Linea A", int daysAgo = 1, CancellationToken ct = default)
     {
-        var now       = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
         var startTime = now.Date.AddDays(-daysAgo).AddHours(8);   // ieri 08:00
-        var stopTime  = startTime.AddHours(8);                     // ieri 16:00
+        var stopTime = startTime.AddHours(8);                     // ieri 16:00
 
         // ── 1. Trova la linea e le macchine ─────────────────────────────────
         var line = await _uow.Repository<ProductionLine>()
@@ -41,14 +41,14 @@ public class SeedDataService
             .FirstOrDefaultAsync(ct);
 
         if (line is null)
-            throw new InvalidOperationException(    
+            throw new InvalidOperationException(
                 $"Linea '{lineName}' non trovata. Esegui prima TestData.sql.");
 
-       //var machines = line.Machines.OrderBy(m => m.Code).ToList();
-       var machines = await  _uow.Repository<Machine>()
-            .Query(x => x.ProductionLineId == line.Id)
-            .OrderBy(m => m.Code)
-            .ToListAsync(ct);
+        //var machines = line.Machines.OrderBy(m => m.Code).ToList();
+        var machines = await _uow.Repository<Machine>()
+             .Query(x => x.ProductionLineId == line.Id)
+             .OrderBy(m => m.Code)
+             .ToListAsync(ct);
 
         if (machines.Count == 0)
             throw new InvalidOperationException(
@@ -77,33 +77,54 @@ public class SeedDataService
             // ProductionOrder
             var order = new ProductionOrder
             {
-                Id                = Guid.NewGuid(),
-                OrderNumber       = orderCode,
-                ProductCode       = "PRD-001",
-                PlannedQuantity   = 500,
-                StartTime         = startTime,
-                EndTime           = stopTime,
-                ProductionLineId  = line.Id,
+                Id = Guid.NewGuid(),
+                OrderNumber = orderCode,
+                ProductCode = "PRD-001",
+                PlannedQuantity = 500,
+                StartTime = startTime,
+                EndTime = stopTime,
+                ProductionLineId = line.Id,
             };
             await _uow.Repository<ProductionOrder>().AddAsync(order);
 
-            // Carica i MetricType dal DB (creati dalla migrazione RelationalMetrics)
-            var metricTypes = await _uow.Repository<MetricType>().ListAsync();
-            var mtDict = metricTypes.ToDictionary(m => m.Name);
+            // ── Catalogo canonico delle metriche usate dal seed ─────────────────
+            // Se una metrica non esiste ancora nel DB viene inserita automaticamente,
+            // così il seed è self-contained e funziona anche su un DB vuoto.
+            var defaultMetricTypes = new[]
+            {
+                new MetricType { Id = Guid.NewGuid(), Name = "quantity_produced",  Description = "Quantità prodotta",          Unit = "pcs"  },
+                new MetricType { Id = Guid.NewGuid(), Name = "scrap_quantity",      Description = "Quantità scarti",            Unit = "pcs"  },
+                new MetricType { Id = Guid.NewGuid(), Name = "cycle_time",          Description = "Tempo ciclo",                Unit = "min"  },
+                new MetricType { Id = Guid.NewGuid(), Name = "energy_consumption",  Description = "Consumo energetico",         Unit = "kWh"  },
+                new MetricType { Id = Guid.NewGuid(), Name = "temperature",         Description = "Temperatura macchina",       Unit = "°C"   },
+            };
 
-            // Helper: restituisce il MetricType per nome o lancia un'eccezione chiara
-            MetricType GetMT(string name) =>
-                mtDict.TryGetValue(name, out var mt)
-                    ? mt
-                    : throw new InvalidOperationException(
-                        $"MetricType '{name}' non trovato nel DB. " +
-                        "Assicurarsi che la migrazione RelationalMetrics sia stata applicata.");
+            var existingMetricTypes = (await _uow.BaseRepository<MetricType>().ListAsync()).ToList();
 
-            var mtQty    = GetMT("quantity_produced");
-            var mtScrap  = GetMT("scrap_quantity");
-            var mtCycle  = GetMT("cycle_time");
-            var mtEnergy = GetMT("energy_consumption");
-            var mtTemp   = GetMT("temperature");
+            var newMetricTypes = defaultMetricTypes
+                .Where(d => !existingMetricTypes.Any(e =>
+                    string.Equals(e.Name, d.Name, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            foreach (var mt in newMetricTypes)
+            {
+                await _uow.BaseRepository<MetricType>().AddAsync(mt);
+                _logger.LogInformation("MetricType '{Name}' non trovato — inserito automaticamente.", mt.Name);
+            }
+
+            // Unisce esistenti + appena inseriti per avere il catalogo completo
+            var metricTypes = existingMetricTypes.Concat(newMetricTypes).ToList();
+
+            // Generatori di valori casuali per metrica — usati solo se la metrica è nota;
+            // le metriche non censite ricevono un valore 0 di default.
+            var valueGenerators = new Dictionary<string, Func<decimal>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["quantity_produced"] = () => _rng.Next(80, 121),
+                ["scrap_quantity"] = () => _rng.Next(0, 6),
+                ["cycle_time"] = () => Math.Round((decimal)(1.5 + _rng.NextDouble() * 2.0), 2),
+                ["energy_consumption"] = () => Math.Round((decimal)(80.0 + _rng.NextDouble() * 40.0), 1),
+                ["temperature"] = () => Math.Round((decimal)(35.0 + _rng.NextDouble() * 20.0), 1),
+            };
 
             int pdCount = 0;
             int evCount = 0;
@@ -113,46 +134,47 @@ public class SeedDataService
                 // MachineEvent START
                 await _uow.Repository<MachineEvent>().AddAsync(new MachineEvent
                 {
-                    Id        = Guid.NewGuid(),
+                    Id = Guid.NewGuid(),
                     MachineId = machine.Id,
                     EventType = "START",
                     EventTime = startTime,
-                    Message   = $"{machine.Code} - Avvio turno",
+                    Message = $"{machine.Code} - Avvio turno",
                 });
 
                 // MachineEvent STOP
                 await _uow.Repository<MachineEvent>().AddAsync(new MachineEvent
                 {
-                    Id        = Guid.NewGuid(),
+                    Id = Guid.NewGuid(),
                     MachineId = machine.Id,
                     EventType = "STOP",
                     EventTime = stopTime,
-                    Message   = $"{machine.Code} - Fine turno",
+                    Message = $"{machine.Code} - Fine turno",
                 });
                 evCount += 2;
 
-                // 15 ProductionData — ogni 30 minuti
+                // 15 slot temporali — ogni 30 minuti
                 for (int slot = 1; slot <= 15; slot++)
                 {
                     var ts = startTime.AddMinutes(slot * 30);
-                    var pdId = Guid.NewGuid();
-                    var pd = new ProductionData
+
+                    // Un record ProductionData per ogni MetricType presente nel catalogo
+                    foreach (var metricType in metricTypes)
                     {
-                        Id                = pdId,
-                        MachineId         = machine.Id,
-                        ProductionOrderId = order.Id,
-                        Timestamp         = ts,
-                        Metrics = new List<ProductionDataMetric>
+                        var value = valueGenerators.TryGetValue(metricType.Name, out var gen)
+                            ? gen()
+                            : 0m;
+
+                        await _uow.Repository<ProductionData>().AddAsync(new ProductionData
                         {
-                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtQty.Id,    Value = _rng.Next(80, 121) },
-                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtScrap.Id,  Value = _rng.Next(0, 6) },
-                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtCycle.Id,  Value = Math.Round((decimal)(1.5 + _rng.NextDouble() * 2.0), 2) },
-                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtEnergy.Id, Value = Math.Round((decimal)(80.0 + _rng.NextDouble() * 40.0), 1) },
-                            new() { Id = Guid.NewGuid(), ProductionDataId = pdId, MetricTypeId = mtTemp.Id,   Value = Math.Round((decimal)(35.0 + _rng.NextDouble() * 20.0), 1) },
-                        }
-                    };
-                    await _uow.Repository<ProductionData>().AddAsync(pd);
-                    pdCount++;
+                            Id = Guid.NewGuid(),
+                            MachineId = machine.Id,
+                            ProductionOrderId = order.Id,
+                            Timestamp = ts,
+                            MetricTypeId = metricType.Id,
+                            Value = value,
+                        });
+                        pdCount++;
+                    }
                 }
             }
 
@@ -164,14 +186,14 @@ public class SeedDataService
 
             return new SeedDataResult
             {
-                Success              = true,
-                OrderNumber          = orderCode,
-                LineName             = lineName,
-                MachinesCount        = machines.Count,
-                ProductionDataCount  = pdCount,
-                MachineEventsCount   = evCount,
-                Period               = $"{startTime:yyyy-MM-dd HH:mm} → {stopTime:HH:mm} UTC",
-                Message              = $"Seed completato: ordine {orderCode}, {pdCount} record ProductionData su {machines.Count} macchine.",
+                Success = true,
+                OrderNumber = orderCode,
+                LineName = lineName,
+                MachinesCount = machines.Count,
+                ProductionDataCount = pdCount,
+                MachineEventsCount = evCount,
+                Period = $"{startTime:yyyy-MM-dd HH:mm} → {stopTime:HH:mm} UTC",
+                Message = $"Seed completato: ordine {orderCode}, {pdCount} record ProductionData su {machines.Count} macchine.",
             };
         }
         catch (Exception ex)
@@ -189,12 +211,12 @@ public class SeedDataService
 
 public class SeedDataResult
 {
-    public bool   Success             { get; set; }
-    public string OrderNumber         { get; set; } = string.Empty;
-    public string LineName            { get; set; } = string.Empty;
-    public int    MachinesCount       { get; set; }
-    public int    ProductionDataCount { get; set; }
-    public int    MachineEventsCount  { get; set; }
-    public string Period              { get; set; } = string.Empty;
-    public string Message             { get; set; } = string.Empty;
+    public bool Success { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public string LineName { get; set; } = string.Empty;
+    public int MachinesCount { get; set; }
+    public int ProductionDataCount { get; set; }
+    public int MachineEventsCount { get; set; }
+    public string Period { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 }

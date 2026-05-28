@@ -1,0 +1,355 @@
+<div class="flex flex-col flex-auto min-w-0 bg-gray-50 dark:bg-gray-900 min-h-screen">
+
+    <!-- ════════════════════ HEADER ════════════════════ -->
+    <div class="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 border-b shadow-sm">
+        <div>
+            <h1 class="text-xl font-semibold tracking-tight">Linee di Produzione</h1>
+            <p class="text-sm text-secondary mt-0.5">Gestisci linee e macchine del tuo stabilimento</p>
+        </div>
+        <button mat-flat-button color="primary" (click)="openCreateLineModal()">
+            <mat-icon svgIcon="heroicons_outline:plus" class="mr-1 icon-size-4"></mat-icon>
+            Nuova Linea
+        </button>
+    </div>
+
+    <div class="flex flex-col gap-6 p-6">
+
+        <!-- ════════════════════ GRAFICO ════════════════════ -->
+        <!-- <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-4">
+            <apx-chart
+                #chart
+                [series]="chartOptions.series"
+                [chart]="chartOptions.chart"
+                [plotOptions]="chartOptions.plotOptions"
+                [dataLabels]="chartOptions.dataLabels"
+                [xaxis]="chartOptions.xaxis"
+                [yaxis]="chartOptions.yaxis"
+                [fill]="chartOptions.fill"
+                [legend]="chartOptions.legend"
+                [tooltip]="chartOptions.tooltip"
+                [title]="chartOptions.title"
+                [colors]="chartOptions.colors">
+            </apx-chart>
+        </div> -->
+
+        <!-- ════════════════════ TABELLA LINEE ════════════════════ -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-3 border-b">
+                <h2 class="font-semibold text-sm">Linee di Produzione ({{ lines.length }})</h2>
+            </div>
+
+            <!-- Barra di progresso: visibile solo durante refresh quando ci sono già dati -->
+            <mat-progress-bar *ngIf="isLoadingLines && lines.length > 0"
+                              mode="indeterminate" class="w-full">
+            </mat-progress-bar>
+
+            <!-- Spinner iniziale: solo al primissimo caricamento (nessun dato ancora) -->
+            <div *ngIf="isLoadingLines && lines.length === 0" class="flex flex-col items-center py-12 gap-3">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="text-sm text-secondary">Caricamento linee in corso…</p>
+            </div>
+
+            <!-- Errore di caricamento -->
+            <div *ngIf="loadError" class="flex items-start gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 mx-4 mt-4 rounded">
+                <mat-icon svgIcon="heroicons_outline:exclamation-triangle" class="icon-size-5 text-red-600 flex-shrink-0 mt-0.5"></mat-icon>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-red-800 dark:text-red-300">Errore nel caricamento</p>
+                    <p class="text-xs text-red-600 dark:text-red-400 mt-0.5">{{ loadError }}</p>
+                </div>
+                <button mat-stroked-button class="text-xs flex-shrink-0" (click)="_loadAll()">
+                    <mat-icon svgIcon="heroicons_outline:arrow-path" class="icon-size-4 mr-1"></mat-icon>
+                    Riprova
+                </button>
+            </div>
+
+            <!-- Empty: nessuna linea trovata (risposta vuota dal server) -->
+            <div *ngIf="!isLoadingLines && !loadError && lines.length === 0"
+                 class="flex flex-col items-center py-12 text-secondary">
+                <mat-icon svgIcon="heroicons_outline:queue-list" class="icon-size-12 mb-3 opacity-30"></mat-icon>
+                <p class="text-sm">Nessuna linea configurata. Crea la prima con il pulsante in alto.</p>
+            </div>
+
+            <!-- Tabella: visibile sempre quando ci sono dati, anche durante il reload -->
+            <table *ngIf="lines.length > 0" class="w-full text-sm"
+                   [class.opacity-60]="isLoadingLines">
+                <thead class="bg-gray-50 dark:bg-gray-700 text-xs uppercase tracking-wider text-secondary">
+                    <tr>
+                        <th class="px-5 py-3 text-left font-medium">Codice</th>
+                        <th class="px-5 py-3 text-left font-medium">Nome</th>
+                        <th class="px-5 py-3 text-left font-medium hidden md:table-cell">Dipartimento</th>
+                        <th class="px-5 py-3 text-center font-medium hidden sm:table-cell">Macchine</th>
+                        <th class="px-5 py-3 text-center font-medium">Stato</th>
+                        <th class="px-5 py-3 text-right font-medium">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <ng-container *ngFor="let line of lines; trackBy: trackById">
+                        <!-- Riga linea -->
+                        <tr class="border-t cursor-pointer transition-colors"
+                            [class.bg-indigo-50]="selectedLine?.id === line.id"
+                            [class.dark:bg-indigo-900]="selectedLine?.id === line.id"
+                            [class.hover:bg-gray-50]="selectedLine?.id !== line.id"
+                            [class.dark:hover:bg-gray-750]="selectedLine?.id !== line.id"
+                            (click)="selectLine(line)">
+                            <td class="px-5 py-3 font-mono font-semibold text-indigo-600 dark:text-indigo-300">
+                                {{ line.code }}
+                            </td>
+                            <td class="px-5 py-3 font-medium">
+                                <div class="flex items-center gap-2">
+                                    <mat-icon svgIcon="heroicons_mini:chevron-right"
+                                              class="icon-size-4 text-secondary transition-transform flex-shrink-0"
+                                              [class.rotate-90]="selectedLine?.id === line.id">
+                                    </mat-icon>
+                                    {{ line.name }}
+                                </div>
+                            </td>
+                            <td class="px-5 py-3 text-secondary hidden md:table-cell">{{ line.departmentName }}</td>
+                            <td class="px-5 py-3 text-center hidden sm:table-cell">
+                                <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-200">
+                                    {{ line.machines?.length ?? 0 }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-3 text-center">
+                                <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                      [class]="line.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-200 text-gray-500'">
+                                    {{ line.isActive ? 'Attiva' : 'Inattiva' }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-3 text-right">
+                                <button mat-icon-button
+                                        matTooltip="Modifica linea"
+                                        (click)="openEditLineModal(line, $event)">
+                                    <mat-icon svgIcon="heroicons_outline:pencil-square" class="icon-size-4"></mat-icon>
+                                </button>
+                                <button mat-icon-button color="warn"
+                                        matTooltip="Elimina linea"
+                                        [disabled]="deletingLineId === line.id"
+                                        (click)="deleteLine(line, $event)">
+                                    <mat-spinner *ngIf="deletingLineId === line.id" diameter="16"></mat-spinner>
+                                    <mat-icon *ngIf="deletingLineId !== line.id"
+                                              svgIcon="heroicons_outline:trash" class="icon-size-4">
+                                    </mat-icon>
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- ── Dettaglio macchine (inline accordion) ── -->
+                        <tr *ngIf="selectedLine?.id === line.id">
+                            <td colspan="6" class="bg-indigo-50 dark:bg-indigo-950 border-t border-indigo-200 dark:border-indigo-700 px-0 py-0">
+                                <div class="px-6 py-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="text-sm font-semibold text-indigo-800 dark:text-indigo-200">
+                                            Macchine – {{ line.name }}
+                                        </h3>
+                                        <button mat-stroked-button color="primary"
+                                                class="text-xs"
+                                                (click)="openCreateMachineModal(); $event.stopPropagation()">
+                                            <mat-icon svgIcon="heroicons_outline:plus" class="icon-size-4 mr-1"></mat-icon>
+                                            Aggiungi Macchina
+                                        </button>
+                                    </div>
+
+                                    <!-- Spinner caricamento macchine -->
+                                    <div *ngIf="isLoadingMachines"
+                                         class="flex items-center gap-3 py-4 text-secondary text-sm">
+                                        <mat-spinner diameter="20"></mat-spinner>
+                                        <span>Caricamento macchine…</span>
+                                    </div>
+
+                                    <!-- Nessuna macchina -->
+                                    <div *ngIf="!isLoadingMachines && !(selectedLine?.machines?.length)"
+                                         class="flex items-center gap-2 py-3 text-indigo-700 dark:text-indigo-300 text-sm">
+                                        <mat-icon svgIcon="heroicons_outline:information-circle" class="icon-size-4 flex-shrink-0"></mat-icon>
+                                        Nessuna macchina su questa linea. Usa "Aggiungi Macchina" per crearne una.
+                                    </div>
+
+                                    <!-- Tabella macchine -->
+                                    <table *ngIf="!isLoadingMachines && selectedLine?.machines?.length"
+                                           class="w-full text-sm bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm">
+                                        <thead class="bg-gray-50 dark:bg-gray-700 text-xs uppercase tracking-wider text-secondary">
+                                            <tr>
+                                                <th class="px-4 py-2 text-left font-medium">Codice</th>
+                                                <th class="px-4 py-2 text-left font-medium">Nome</th>
+                                                <th class="px-4 py-2 text-left font-medium hidden sm:table-cell">Tipo</th>
+                                                <th class="px-4 py-2 text-center font-medium">Stato</th>
+                                                <th class="px-4 py-2 text-right font-medium">Azioni</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr *ngFor="let m of (selectedLine?.machines ?? []); trackBy: trackById"
+                                                class="border-t last:border-0 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                                <td class="px-4 py-2.5 font-mono font-semibold text-indigo-600 dark:text-indigo-300">{{ m.code }}</td>
+                                                <td class="px-4 py-2.5 font-medium">{{ m.name }}</td>
+                                                <td class="px-4 py-2.5 text-secondary hidden sm:table-cell">{{ m.type }}</td>
+                                                <td class="px-4 py-2.5 text-center">
+                                                    <span class="text-xs px-2 py-0.5 rounded-full font-medium" [class]="statusColor(m.status)">
+                                                        {{ m.status }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-2.5 text-right">
+                                                    <button mat-icon-button
+                                                            matTooltip="Modifica macchina"
+                                                            (click)="openEditMachineModal(m, $event)">
+                                                        <mat-icon svgIcon="heroicons_outline:pencil-square" class="icon-size-4"></mat-icon>
+                                                    </button>
+                                                    <button mat-icon-button color="warn"
+                                                            matTooltip="Elimina macchina"
+                                                            [disabled]="deletingMachineId === m.id"
+                                                            (click)="deleteMachine(m, $event)">
+                                                        <mat-spinner *ngIf="deletingMachineId === m.id" diameter="16"></mat-spinner>
+                                                        <mat-icon *ngIf="deletingMachineId !== m.id"
+                                                                  svgIcon="heroicons_outline:trash" class="icon-size-4">
+                                                        </mat-icon>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    </ng-container>
+                </tbody>
+            </table>
+        </div>
+
+    </div><!-- /p-6 -->
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     MODAL – LINEA
+════════════════════════════════════════════════════════════ -->
+<div *ngIf="showLineModal"
+     class="fixed inset-0 z-50 flex items-center justify-center"
+     style="background: rgba(0,0,0,0.45);"
+     (click)="closeLineModal()">
+
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+         (click)="$event.stopPropagation()">
+
+        <!-- Header modale -->
+        <div class="flex items-center justify-between px-6 py-4 border-b">
+            <h2 class="font-semibold text-base">
+                {{ lineModalMode === 'create' ? 'Nuova Linea di Produzione' : 'Modifica Linea' }}
+            </h2>
+            <button mat-icon-button (click)="closeLineModal()">
+                <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <form [formGroup]="lineForm" class="px-6 py-4 flex flex-col gap-3">
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Codice</mat-label>
+                <input matInput formControlName="code" placeholder="es. LINE-01" maxlength="20" autocomplete="off">
+                <mat-error *ngIf="lineForm.get('code')?.hasError('required')">Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Nome</mat-label>
+                <input matInput formControlName="name" placeholder="es. Linea Assemblaggio A" autocomplete="off">
+                <mat-error *ngIf="lineForm.get('name')?.hasError('required')">Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Descrizione (opzionale)</mat-label>
+                <textarea matInput formControlName="description" rows="2" placeholder="Breve descrizione..."></textarea>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Dipartimento</mat-label>
+                <mat-select formControlName="departmentId">
+                    <mat-option *ngFor="let d of departments" [value]="d.id">
+                        {{ d.code }} – {{ d.name }}
+                    </mat-option>
+                </mat-select>
+                <mat-error *ngIf="lineForm.get('departmentId')?.hasError('required')">Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <div *ngIf="lineModalMode === 'edit'" class="flex items-center gap-3 py-1">
+                <mat-slide-toggle formControlName="isActive" color="primary">Linea attiva</mat-slide-toggle>
+            </div>
+
+        </form>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 dark:bg-gray-750">
+            <button mat-stroked-button (click)="closeLineModal()">Annulla</button>
+            <button mat-flat-button color="primary"
+                    [disabled]="lineForm.invalid || isSavingLine"
+                    (click)="saveLine()">
+                <mat-spinner *ngIf="isSavingLine" diameter="18" class="mr-2"></mat-spinner>
+                {{ lineModalMode === 'create' ? 'Crea Linea' : 'Salva Modifiche' }}
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     MODAL – MACCHINA
+════════════════════════════════════════════════════════════ -->
+<div *ngIf="showMachineModal"
+     class="fixed inset-0 z-50 flex items-center justify-center"
+     style="background: rgba(0,0,0,0.45);"
+     (click)="closeMachineModal()">
+
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+         (click)="$event.stopPropagation()">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b">
+            <h2 class="font-semibold text-base">
+                {{ machineModalMode === 'create' ? 'Aggiungi Macchina' : 'Modifica Macchina' }}
+            </h2>
+            <button mat-icon-button (click)="closeMachineModal()">
+                <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <form [formGroup]="machineForm" class="px-6 py-4 flex flex-col gap-3">
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Codice</mat-label>
+                <input matInput formControlName="code" placeholder="es. MCH-001" maxlength="20" autocomplete="off">
+                <mat-error>Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Nome</mat-label>
+                <input matInput formControlName="name" placeholder="es. Tornio CNC Alpha" autocomplete="off">
+                <mat-error>Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Tipo</mat-label>
+                <mat-select formControlName="type">
+                    <mat-option *ngFor="let t of machineTypes" [value]="t">{{ t }}</mat-option>
+                </mat-select>
+                <mat-error>Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field *ngIf="machineModalMode === 'edit'" appearance="outline" class="w-full">
+                <mat-label>Stato</mat-label>
+                <mat-select formControlName="status">
+                    <mat-option *ngFor="let s of machineStatuses" [value]="s">{{ s }}</mat-option>
+                </mat-select>
+            </mat-form-field>
+
+        </form>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 dark:bg-gray-750">
+            <button mat-stroked-button (click)="closeMachineModal()">Annulla</button>
+            <button mat-flat-button color="accent"
+                    [disabled]="machineForm.invalid || isSavingMachine"
+                    (click)="saveMachine()">
+                <mat-spinner *ngIf="isSavingMachine" diameter="18" class="mr-2"></mat-spinner>
+                {{ machineModalMode === 'create' ? 'Aggiungi' : 'Salva Modifiche' }}
+            </button>
+        </div>
+    </div>
+</div>

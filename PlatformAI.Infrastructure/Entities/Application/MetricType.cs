@@ -2,7 +2,7 @@ using System;
 
 namespace PlatformAI.Infrastructure.Application;
 
-public class MetricType : Entity
+public class MetricType : BaseEntity
 {
     /// <summary>
     /// Nome della metrica (es. "Temperature", "QuantityProduced", "CycleTime", "EnergyConsumption")
@@ -19,5 +19,4 @@ public class MetricType : Entity
     /// </summary>
     public string? Unit { get; set; }
 
-    public ICollection<ProductionDataMetric> ProductionDataMetrics { get; set; } = new List<ProductionDataMetric>();
 }

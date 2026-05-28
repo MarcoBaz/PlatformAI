@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using PlatformAI.Infrastructure;
 using PlatformAI.Infrastructure.Application;
+// MachineSnapshot e ProductionDataExtensions (ToSnapshots) sono definiti in PlatformAI.Infrastructure
 using PlatformAI.Infrastructure.Master;
 using PlatformAI.ML;
 using PlatformAI.ML.Services;
@@ -631,8 +632,7 @@ public class LLMAnalyticsService
                 x.Timestamp <= endDate)
                 .OrderBy(x => x.Timestamp)
                 .Include(x => x.Machine)
-                .Include(x => x.Metrics)
-                .ThenInclude(m => m.MetricType)
+                .Include(x => x.MetricType)
                 .ToList();
 
             if (!data.Any())
@@ -648,24 +648,36 @@ public class LLMAnalyticsService
             // Genera grafici in base alla metrica richiesta
             var chartType = args.ChartType ?? "line";
 
+            // Helper locale: filtra le righe per nome metrica e aggrega il valore.
+            // Ogni ProductionData è ora una singola lettura di metrica (Value + MetricType.Name).
+            static double SumMetric(IEnumerable<ProductionData> rows, string metric)
+                => (double)rows.Where(x => string.Equals(x.MetricType?.Name, metric, StringComparison.OrdinalIgnoreCase))
+                               .Sum(x => x.Value);
+
+            static double AvgMetric(IEnumerable<ProductionData> rows, string metric)
+            {
+                var values = rows.Where(x => string.Equals(x.MetricType?.Name, metric, StringComparison.OrdinalIgnoreCase)).ToList();
+                return values.Any() ? (double)values.Average(x => x.Value) : 0d;
+            }
+
             if (args.Metric == "all")
             {
-                charts.Add(CreateChart("Quantità Prodotta",       groupedData, d => (double)d.Sum(x => x.GetMetric("quantity_produced")),        chartType, ChartColors.Blue,   ChartColors.BlueFill));
-                charts.Add(CreateChart("Consumo Energetico (kWh)", groupedData, d => (double)d.Average(x => x.GetMetric("energy_consumption")),   chartType, ChartColors.Green,  ChartColors.GreenFill));
-                charts.Add(CreateChart("Temperatura Media (°C)",  groupedData, d => (double)d.Average(x => x.GetMetric("temperature")),          chartType, ChartColors.Red,    ChartColors.RedFill));
-                charts.Add(CreateChart("Scarti",                  groupedData, d => (double)d.Sum(x => x.GetMetric("scrap_quantity")),            "bar",     ChartColors.Orange, ChartColors.OrangeFill));
+                charts.Add(CreateChart("Quantità Prodotta",        groupedData, d => SumMetric(d, "quantity_produced"),  chartType, ChartColors.Blue,   ChartColors.BlueFill));
+                charts.Add(CreateChart("Consumo Energetico (kWh)", groupedData, d => AvgMetric(d, "energy_consumption"), chartType, ChartColors.Green,  ChartColors.GreenFill));
+                charts.Add(CreateChart("Temperatura Media (°C)",   groupedData, d => AvgMetric(d, "temperature"),        chartType, ChartColors.Red,    ChartColors.RedFill));
+                charts.Add(CreateChart("Scarti",                   groupedData, d => SumMetric(d, "scrap_quantity"),     "bar",     ChartColors.Orange, ChartColors.OrangeFill));
             }
             else
             {
                 var chart = args.Metric switch
                 {
-                    "quantity"    => CreateChart("Quantità Prodotta",        groupedData, d => (double)d.Sum(x => x.GetMetric("quantity_produced")),       chartType, ChartColors.Blue,   ChartColors.BlueFill),
-                    "energy"      => CreateChart("Consumo Energetico (kWh)", groupedData, d => (double)d.Average(x => x.GetMetric("energy_consumption")),  chartType, ChartColors.Green,  ChartColors.GreenFill),
-                    "temperature" => CreateChart("Temperatura Media (°C)",   groupedData, d => (double)d.Average(x => x.GetMetric("temperature")),         chartType, ChartColors.Red,    ChartColors.RedFill),
-                    "scrap"       => CreateChart("Scarti",                   groupedData, d => (double)d.Sum(x => x.GetMetric("scrap_quantity")),           chartType, ChartColors.Orange, ChartColors.OrangeFill),
-                    "cycle_time"  => CreateChart("Tempo Ciclo Medio (min)",  groupedData, d => (double)d.Average(x => x.GetMetric("cycle_time")),          chartType, ChartColors.Purple, ChartColors.PurpleFill),
-                    "efficiency"  => CreateChart("Efficienza (%)",           groupedData, d => CalculateEfficiency(d),                                     chartType, ChartColors.Green,  ChartColors.GreenFill),
-                    _             => CreateChart("Quantità Prodotta",        groupedData, d => (double)d.Sum(x => x.GetMetric("quantity_produced")),       chartType, ChartColors.Blue,   ChartColors.BlueFill)
+                    "quantity"    => CreateChart("Quantità Prodotta",        groupedData, d => SumMetric(d, "quantity_produced"),  chartType, ChartColors.Blue,   ChartColors.BlueFill),
+                    "energy"      => CreateChart("Consumo Energetico (kWh)", groupedData, d => AvgMetric(d, "energy_consumption"), chartType, ChartColors.Green,  ChartColors.GreenFill),
+                    "temperature" => CreateChart("Temperatura Media (°C)",   groupedData, d => AvgMetric(d, "temperature"),        chartType, ChartColors.Red,    ChartColors.RedFill),
+                    "scrap"       => CreateChart("Scarti",                   groupedData, d => SumMetric(d, "scrap_quantity"),     chartType, ChartColors.Orange, ChartColors.OrangeFill),
+                    "cycle_time"  => CreateChart("Tempo Ciclo Medio (min)",  groupedData, d => AvgMetric(d, "cycle_time"),         chartType, ChartColors.Purple, ChartColors.PurpleFill),
+                    "efficiency"  => CreateChart("Efficienza (%)",           groupedData, d => CalculateEfficiency(d),            chartType, ChartColors.Green,  ChartColors.GreenFill),
+                    _             => CreateChart("Quantità Prodotta",        groupedData, d => SumMetric(d, "quantity_produced"),  chartType, ChartColors.Blue,   ChartColors.BlueFill)
                 };
                 charts.Add(chart);
             }
@@ -701,22 +713,28 @@ public class LLMAnalyticsService
             }
             var repo = _uow.Repository<ProductionData>();
 
-            // Recupera gli ultimi dati per calcolare le features
-            var recentData = repo.Query(x =>
+            // Recupera gli ultimi dati per calcolare le features.
+            // Ogni riga è una singola lettura di metrica: prendiamo N righe e le
+            // raggruppiamo in snapshot (MachineId+Timestamp) per ottenere le medie per ciclo.
+            var recentRows = repo.Query(x =>
                 x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code)
-                .Include(x => x.Metrics)
-                .ThenInclude(m => m.MetricType)
+                .Include(x => x.MetricType)
                 .OrderByDescending(x => x.Timestamp)
+                .Take(50)    // ~10 snapshot × ~5 metriche
+                .ToList();
+
+            var recentSnapshots = recentRows.ToSnapshots()
+                .OrderByDescending(s => s.Timestamp)
                 .Take(10)
                 .ToList();
 
-            if (recentData.Any())
+            if (recentSnapshots.Any())
             {
-                var avgQuantity  = (double)recentData.Average(x => x.GetMetric("quantity_produced"));
-                var avgEnergy    = (double)recentData.Average(x => x.GetMetric("energy_consumption"));
-                var avgTemp      = (double)recentData.Average(x => x.GetMetric("temperature"));
-                var avgScrap     = (double)recentData.Average(x => x.GetMetric("scrap_quantity"));
-                var avgCycleTime = (double)recentData.Average(x => x.GetMetric("cycle_time"));
+                var avgQuantity  = (double)recentSnapshots.Average(s => s.GetMetric("quantity_produced"));
+                var avgEnergy    = (double)recentSnapshots.Average(s => s.GetMetric("energy_consumption"));
+                var avgTemp      = (double)recentSnapshots.Average(s => s.GetMetric("temperature"));
+                var avgScrap     = (double)recentSnapshots.Average(s => s.GetMetric("scrap_quantity"));
+                var avgCycleTime = (double)recentSnapshots.Average(s => s.GetMetric("cycle_time"));
 
                 // Predizione semplice basata su media mobile (in produzione userebbe il modello ML)
                 prediction.PredictedValue = args.Target switch
@@ -740,9 +758,9 @@ public class LLMAnalyticsService
                 prediction.Explanation = args.Target switch
                 {
                     "quantity" => $"Basandomi sui dati recenti (media {avgQuantity:F0} unità), prevedo una produzione di circa {prediction.PredictedValue:F0} unità.",
-                    "scrap" => $"Il tasso di scarto medio recente è {avgScrap:F0} unità. Prevedo un valore simile.",
-                    "energy" => $"Il consumo energetico medio è {avgEnergy:F1} kWh. Prevedo un consumo simile.",
-                    _ => "Predizione basata su media mobile dei dati recenti."
+                    "scrap"    => $"Il tasso di scarto medio recente è {avgScrap:F0} unità. Prevedo un valore simile.",
+                    "energy"   => $"Il consumo energetico medio è {avgEnergy:F1} kWh. Prevedo un consumo simile.",
+                    _          => "Predizione basata su media mobile dei dati recenti."
                 };
             }
             else
@@ -787,29 +805,34 @@ public class LLMAnalyticsService
 
             var repo = _uow.Repository<ProductionData>();
 
-            // Recupera gli ultimi dati per costruire le features
-            var recentData = repo.Query(x =>
+            // Recupera gli ultimi dati per costruire le features.
+            // Ogni riga è una singola lettura di metrica: convertiamo in snapshot
+            // (tutte le metriche per lo stesso MachineId+Timestamp).
+            var recentRows = repo.Query(x =>
                 x.Machine.ProductionLine.Department.TenantCode == user.Tenant.Code)
-                .Include(x => x.Metrics)
-                .ThenInclude(m => m.MetricType)
+                .Include(x => x.MetricType)
                 .OrderByDescending(x => x.Timestamp)
-                .Take(10)
+                .Take(50)    // ~10 snapshot × ~5 metriche
                 .ToList();
 
-            if (!recentData.Any())
+            var recentSnapshots = recentRows.ToSnapshots()
+                .OrderByDescending(s => s.Timestamp)
+                .ToList();
+
+            if (!recentSnapshots.Any())
             {
                 prediction.Explanation = "Dati insufficienti per generare una predizione ML.";
                 return prediction;
             }
 
-            var latest = recentData.First();
-            var last3  = recentData.Take(3).ToList();
+            var latestSnap = recentSnapshots.First();
+            var last3Snaps = recentSnapshots.Take(3).ToList();
 
-            var latestQty    = latest.GetMetric("quantity_produced");
-            var latestCycle  = latest.GetMetric("cycle_time");
-            var latestEnergy = latest.GetMetric("energy_consumption");
-            var latestTemp   = latest.GetMetric("temperature");
-            var latestScrap  = latest.GetMetric("scrap_quantity");
+            var latestQty    = latestSnap.GetMetric("quantity_produced");
+            var latestCycle  = latestSnap.GetMetric("cycle_time");
+            var latestEnergy = latestSnap.GetMetric("energy_consumption");
+            var latestTemp   = latestSnap.GetMetric("temperature");
+            var latestScrap  = latestSnap.GetMetric("scrap_quantity");
 
             var referenceTime = args.Horizon switch
             {
@@ -841,10 +864,10 @@ public class LLMAnalyticsService
                     _              => 3
                 },
 
-                AvgQuantityLast3    = (float)last3.Average(x => (double)x.GetMetric("quantity_produced")),
-                AvgCycleTimeLast3   = (float)last3.Average(x => (double)x.GetMetric("cycle_time")),
-                AvgTemperatureLast3 = (float)last3.Average(x => (double)x.GetMetric("temperature")),
-                AvgEnergyLast3      = (float)last3.Average(x => (double)x.GetMetric("energy_consumption"))
+                AvgQuantityLast3    = (float)last3Snaps.Average(s => (double)s.GetMetric("quantity_produced")),
+                AvgCycleTimeLast3   = (float)last3Snaps.Average(s => (double)s.GetMetric("cycle_time")),
+                AvgTemperatureLast3 = (float)last3Snaps.Average(s => (double)s.GetMetric("temperature")),
+                AvgEnergyLast3      = (float)last3Snaps.Average(s => (double)s.GetMetric("energy_consumption"))
             };
 
             // ── CHIAMATA AL MODELLO ML ────────────────────────────────────────
@@ -856,8 +879,8 @@ public class LLMAnalyticsService
                 _logger.LogInformation(
                     "Target '{Target}' non supportato dal modello ML — fallback su media DB", args.Target);
 
-                var avgScrap  = (double)recentData.Average(x => x.GetMetric("scrap_quantity"));
-                var avgEnergy = (double)recentData.Average(x => x.GetMetric("energy_consumption"));
+                var avgScrap  = (double)recentSnapshots.Average(s => s.GetMetric("scrap_quantity"));
+                var avgEnergy = (double)recentSnapshots.Average(s => s.GetMetric("energy_consumption"));
 
                 prediction.PredictedValue = args.Target switch
                 {
@@ -868,8 +891,8 @@ public class LLMAnalyticsService
                 prediction.Confidence = 0.6;
                 prediction.Explanation = args.Target switch
                 {
-                    "scrap"  => $"Il modello ML è addestrato sulla quantità prodotta. Per gli scarti uso la media degli ultimi {recentData.Count} cicli: {prediction.PredictedValue:F0} unità.",
-                    "energy" => $"Il modello ML è addestrato sulla quantità prodotta. Per l'energia uso la media degli ultimi {recentData.Count} cicli: {prediction.PredictedValue:F1} kWh.",
+                    "scrap"  => $"Il modello ML è addestrato sulla quantità prodotta. Per gli scarti uso la media degli ultimi {recentSnapshots.Count} cicli: {prediction.PredictedValue:F0} unità.",
+                    "energy" => $"Il modello ML è addestrato sulla quantità prodotta. Per l'energia uso la media degli ultimi {recentSnapshots.Count} cicli: {prediction.PredictedValue:F1} kWh.",
                     _        => $"Predizione basata su media recente: {prediction.PredictedValue:F2}"
                 };
                 return prediction;
@@ -1229,8 +1252,7 @@ public class LLMAnalyticsService
                 x.Machine.ProductionLine.Department.TenantCode == tenantCode &&
                 x.Timestamp >= startDate &&
                 x.Timestamp <= endDate)
-                .Include(x => x.Metrics)
-                .ThenInclude(m => m.MetricType)
+                .Include(x => x.MetricType)
                 .OrderBy(x => x.Timestamp)
                 .ToList();
 
@@ -1257,10 +1279,19 @@ public class LLMAnalyticsService
             {
                 var currentDay = dailyData[i];
                 var nextDay = dailyData[i + 1];
-                var actualValue = (double)nextDay.Sum(x => x.GetMetric("quantity_produced"));
+                // Con il nuovo modello ogni riga è una singola lettura di metrica:
+                // filtriamo per nome della metrica prima di aggregare.
+                var actualValue = (double)nextDay
+                    .Where(x => string.Equals(x.MetricType?.Name, "quantity_produced", StringComparison.OrdinalIgnoreCase))
+                    .Sum(x => x.Value);
 
-                var last5Days    = dailyData.Skip(i - 4).Take(5).SelectMany(g => g).ToList();
-                var dbPrediction = (double)last5Days.Average(x => x.GetMetric("quantity_produced")) * 1.02;
+                var last5Days = dailyData.Skip(i - 4).Take(5).SelectMany(g => g).ToList();
+                var last5QtyRows = last5Days
+                    .Where(x => string.Equals(x.MetricType?.Name, "quantity_produced", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var dbPrediction = last5QtyRows.Any()
+                    ? (double)last5QtyRows.Average(x => x.Value) * 1.02
+                    : 0d;
 
                 double mlPrediction = 0;
                 double? r2 = null;
@@ -1270,8 +1301,9 @@ public class LLMAnalyticsService
                     var checkpoint = await _trainingService.GetCheckpointAsync(tenantCode);
                     r2 = checkpoint?.RSquared;
 
-                    mlPrediction = (double)last5Days.Average(x => x.GetMetric("quantity_produced")) *
-                                  (1 + (r2 ?? 0) * 0.05);
+                    mlPrediction = last5QtyRows.Any()
+                        ? (double)last5QtyRows.Average(x => x.Value) * (1 + (r2 ?? 0) * 0.05)
+                        : 0d;
                 }
 
                 // Calcola smart prediction
@@ -1445,8 +1477,9 @@ public class LLMAnalyticsService
 
     private double CalculateEfficiency(IEnumerable<ProductionData> data)
     {
-        var total = data.Sum(x => (double)x.GetMetric("quantity_produced"));
-        var scrap = data.Sum(x => (double)x.GetMetric("scrap_quantity"));
+        var rows  = data.ToList();
+        var total = (double)rows.Where(x => string.Equals(x.MetricType?.Name, "quantity_produced", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
+        var scrap = (double)rows.Where(x => string.Equals(x.MetricType?.Name, "scrap_quantity",    StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value);
         if (total == 0) return 0;
         return ((total - scrap) / total) * 100;
     }

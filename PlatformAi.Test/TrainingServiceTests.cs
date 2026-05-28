@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Microsoft.EntityFrameworkCore;
+using PlatformAI.Infrastructure;
 using PlatformAI.Infrastructure.Application;
 using PlatformAI.ML;
 using PlatformAI.ML.Services;
@@ -55,27 +57,55 @@ public class TrainingServiceIntegrationTests : BaseTest
             return;
         }
 
-        var sample = _uow.Repository<ProductionData>()
-                         .Query(x => x.Id != Guid.Empty)
-                         .OrderByDescending(x => x.LastModifiedDate)
-                         .FirstOrDefault();
+        // Carica le ultime righe (una per metrica) e raggruppa in snapshot
+        // in modo da poter estrarre tutti i valori di feature da un unico ciclo.
+        var recentRows = _uow.Repository<ProductionData>()
+                             .Query(x => x.Id != Guid.Empty)
+                             .Include(x => x.MetricType)
+                             .OrderByDescending(x => x.Timestamp)
+                             .Take(50)
+                             .ToList();
 
-        if (sample == null)
+        var snapshots = recentRows.ToSnapshots()
+                                  .OrderByDescending(s => s.Timestamp)
+                                  .ToList();
+
+        if (!snapshots.Any())
         {
             // No data available for prediction, skipping
             return;
         }
 
+        var snap   = snapshots.First();
+        var qty    = snap.GetMetric("quantity_produced");
+        var scrap  = snap.GetMetric("scrap_quantity");
+        var cycle  = snap.GetMetric("cycle_time");
+        var energy = snap.GetMetric("energy_consumption");
+        var temp   = snap.GetMetric("temperature");
+
         var features = new ProductionDataMLEnriched
         {
-            HourOfDay = sample.Timestamp.Hour,
-            DayOfWeek = (int)sample.Timestamp.DayOfWeek,
-            IsWeekend = (sample.Timestamp.DayOfWeek == DayOfWeek.Saturday || sample.Timestamp.DayOfWeek == DayOfWeek.Sunday) ? 1 : 0,
-            Shift = sample.Timestamp.Hour switch
+            // Feature fisiche dallo snapshot più recente
+            CycleTime         = (float)cycle,
+            EnergyConsumption = (float)energy,
+            Temperature       = (float)temp,
+            ScrapQuantity     = (float)scrap,
+
+            // Feature derivate
+            ScrapRate               = qty > 0 ? (float)scrap  / (float)qty   : 0f,
+            EffectiveProductionRate = cycle > 0 ? (float)qty  / (float)cycle : 0f,
+            EnergyPerUnit           = qty > 0 ? (float)energy / (float)qty   : 0f,
+
+            // Feature temporali
+            HourOfDay = snap.Timestamp.Hour,
+            DayOfWeek = (int)snap.Timestamp.DayOfWeek,
+            IsWeekend = (snap.Timestamp.DayOfWeek == DayOfWeek.Saturday ||
+                         snap.Timestamp.DayOfWeek == DayOfWeek.Sunday) ? 1 : 0,
+            Shift = snap.Timestamp.Hour switch
             {
-                >= 6 and < 14 => 1,
+                >= 6 and < 14  => 1,
                 >= 14 and < 22 => 2,
-                _ => 3
+                _              => 3
             }
         };
 

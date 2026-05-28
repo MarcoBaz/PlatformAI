@@ -17,7 +17,7 @@ namespace PlatformAI.Infrastructure.Migrations.Application
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.7")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -366,16 +366,7 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                         .HasColumnType("uniqueidentifier")
                         .HasDefaultValueSql("NEWSEQUENTIALID()");
 
-                    b.Property<DateTime>("CreateDate")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("LastModifiedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LogMessage")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
@@ -384,17 +375,6 @@ namespace PlatformAI.Infrastructure.Migrations.Application
 
                     b.Property<string>("Unit")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserCreate")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserModify")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("ValidityDate")
-                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -420,6 +400,9 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                     b.Property<Guid>("MachineId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("MetricTypeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("ProductionOrderId")
                         .HasColumnType("uniqueidentifier");
 
@@ -437,58 +420,18 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                     b.Property<DateTime?>("ValidityDate")
                         .HasColumnType("datetime2");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("MachineId");
-
-                    b.HasIndex("ProductionOrderId");
-
-                    b.ToTable("ProductionData");
-                });
-
-            modelBuilder.Entity("PlatformAI.Infrastructure.Application.ProductionDataMetric", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWSEQUENTIALID()");
-
-                    b.Property<DateTime>("CreateDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("LastModifiedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LogMessage")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("MetricTypeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ProductionDataId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("UserCreate")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserModify")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("ValidityDate")
-                        .HasColumnType("datetime2");
-
                     b.Property<decimal>("Value")
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MachineId");
+
                     b.HasIndex("MetricTypeId");
 
-                    b.HasIndex("ProductionDataId");
+                    b.HasIndex("ProductionOrderId");
 
-                    b.ToTable("ProductionDataMetrics");
+                    b.ToTable("ProductionData");
                 });
 
             modelBuilder.Entity("PlatformAI.Infrastructure.Application.ProductionLine", b =>
@@ -641,6 +584,12 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PlatformAI.Infrastructure.Application.MetricType", "MetricType")
+                        .WithMany()
+                        .HasForeignKey("MetricTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("PlatformAI.Infrastructure.Application.ProductionOrder", "ProductionOrder")
                         .WithMany()
                         .HasForeignKey("ProductionOrderId")
@@ -649,26 +598,9 @@ namespace PlatformAI.Infrastructure.Migrations.Application
 
                     b.Navigation("Machine");
 
-                    b.Navigation("ProductionOrder");
-                });
-
-            modelBuilder.Entity("PlatformAI.Infrastructure.Application.ProductionDataMetric", b =>
-                {
-                    b.HasOne("PlatformAI.Infrastructure.Application.MetricType", "MetricType")
-                        .WithMany("ProductionDataMetrics")
-                        .HasForeignKey("MetricTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PlatformAI.Infrastructure.Application.ProductionData", "ProductionData")
-                        .WithMany("Metrics")
-                        .HasForeignKey("ProductionDataId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("MetricType");
 
-                    b.Navigation("ProductionData");
+                    b.Navigation("ProductionOrder");
                 });
 
             modelBuilder.Entity("PlatformAI.Infrastructure.Application.ProductionLine", b =>
@@ -708,16 +640,6 @@ namespace PlatformAI.Infrastructure.Migrations.Application
                     b.Navigation("MachineEvents");
 
                     b.Navigation("ProductionData");
-                });
-
-            modelBuilder.Entity("PlatformAI.Infrastructure.Application.MetricType", b =>
-                {
-                    b.Navigation("ProductionDataMetrics");
-                });
-
-            modelBuilder.Entity("PlatformAI.Infrastructure.Application.ProductionData", b =>
-                {
-                    b.Navigation("Metrics");
                 });
 
             modelBuilder.Entity("PlatformAI.Infrastructure.Application.ProductionLine", b =>

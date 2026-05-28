@@ -1074,6 +1074,51 @@
 }
 
 /* -------------------------------------------------------------------------- */
+/*  @ Select panel (dropdown overlay)
+/* -------------------------------------------------------------------------- */
+
+/* Il pannello viene renderizzato nel cdk-overlay-container fuori dall'albero DOM
+   principale, quindi ha bisogno di un background esplicito altrimenti risulta
+   trasparente e le opzioni si sovrappongono al contenuto sottostante. */
+.mat-mdc-select-panel {
+    background-color: white !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.12) !important;
+
+    .dark & {
+        background-color: #1e293b !important; /* slate-800 */
+    }
+}
+
+/* MDC menu surface — classe base usata da mat-select, mat-autocomplete, ecc. */
+.mdc-menu-surface {
+    --mdc-menu-container-color: white;
+    background-color: white !important;
+    border-radius: 8px !important;
+
+    .dark & {
+        --mdc-menu-container-color: #1e293b;
+        background-color: #1e293b !important;
+    }
+}
+
+/* Opzioni nel pannello */
+.mat-mdc-option {
+    &:hover:not(.mdc-list-item--disabled),
+    &.mat-mdc-option-active {
+        background-color: rgba(0, 0, 0, 0.04) !important;
+
+        .dark & {
+            background-color: rgba(255, 255, 255, 0.06) !important;
+        }
+    }
+
+    &.mdc-list-item--selected:not(.mdc-list-item--disabled) {
+        background-color: rgba(var(--fuse-primary-rgb), 0.1) !important;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
 /*  @ Select
 /* -------------------------------------------------------------------------- */
 .mat-mdc-select {

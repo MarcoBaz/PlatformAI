@@ -73,6 +73,20 @@ export const defaultNavigation: FuseNavigationItem[] = [
                 type: 'basic',
                 icon: 'heroicons_outline:users',
                 link: '/apps/user-management',
+            },
+            {
+                id: 'apps.production-lines',
+                title: 'Linee di Produzione',
+                type: 'basic',
+                icon: 'heroicons_outline:cog-6-tooth',
+                link: '/apps/production-lines',
+            },
+            {
+                id: 'apps.departments',
+                title: 'Dipartimenti',
+                type: 'basic',
+                icon: 'heroicons_outline:building-office-2',
+                link: '/apps/departments',
             }
             // {
             //     id: 'apps.chat',

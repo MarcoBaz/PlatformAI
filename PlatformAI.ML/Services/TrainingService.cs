@@ -12,6 +12,7 @@ using Microsoft.ML.Trainers.FastTree;
 using PlatformAI.Infrastructure;
 using PlatformAI.Infrastructure.Application;
 using Microsoft.EntityFrameworkCore;
+// ProductionDataExtensions (ToSnapshots, MachineSnapshot) defined in PlatformAI.Infrastructure
 
 namespace PlatformAI.ML.Services;
 
@@ -232,8 +233,7 @@ public class TrainingService
             .Include(x => x.Machine)
             .ThenInclude(m => m.ProductionLine)
             .ThenInclude(pl => pl.Department)
-            .Include(x => x.Metrics)
-            .ThenInclude(m => m.MetricType)
+            .Include(x => x.MetricType)
             .AsQueryable();
             // solo dati nuovi rispetto al checkpoint
 
@@ -262,8 +262,7 @@ public class TrainingService
             x.LastModifiedDate <= beforeDate);
 
         var list = query
-            .Include(x => x.Metrics)
-            .ThenInclude(m => m.MetricType)
+            .Include(x => x.MetricType)
             .OrderBy(x => x.LastModifiedDate)
             .Take(cfg.MaxHistoricalRecords)   // cap per non sovraccaricare la memoria
             .ToList();
@@ -553,26 +552,27 @@ public class TrainingService
     {
         var enriched = new List<ProductionDataEnriched>();
 
-        // Ordiniamo per Timestamp: necessario per calcolare correttamente le rolling windows
-        var ordered = rawData.OrderBy(x => x.Timestamp).ToList();
+        // Raggruppa le singole righe (una per metrica) in snapshot (tutte le metriche
+        // per una coppia MachineId+Timestamp). ToSnapshots() restituisce già ordinato per Timestamp.
+        var snapshots = rawData.ToSnapshots();
 
-        for (int i = 0; i < ordered.Count; i++)
+        for (int i = 0; i < snapshots.Count; i++)
         {
-            var current = ordered[i];
-            var qty     = current.GetMetric("quantity_produced");
-            var scrap   = current.GetMetric("scrap_quantity");
-            var cycle   = current.GetMetric("cycle_time");
-            var energy  = current.GetMetric("energy_consumption");
-            var temp    = current.GetMetric("temperature");
+            var snap   = snapshots[i];
+            var qty    = snap.GetMetric("quantity_produced");
+            var scrap  = snap.GetMetric("scrap_quantity");
+            var cycle  = snap.GetMetric("cycle_time");
+            var energy = snap.GetMetric("energy_consumption");
+            var temp   = snap.GetMetric("temperature");
 
             var item = new ProductionDataEnriched
             {
                 // ── FEATURE GREZZE ─────────────────────────────────────────────
-                QuantityProduced  = (int)qty,   // questa è la LABEL, non una feature
-                ScrapQuantity     = (int)scrap,
-                CycleTime         = cycle,
-                EnergyConsumption = energy,
-                Temperature       = temp,
+                QuantityProduced  = (float)qty,   // questa è la LABEL, non una feature
+                ScrapQuantity     = (float)scrap,
+                CycleTime         = (float)cycle,
+                EnergyConsumption = (float)energy,
+                Temperature       = (float)temp,
 
                 // ── FEATURE DERIVATE ───────────────────────────────────────────
                 ScrapRate = qty > 0 ? (float)scrap / (float)qty : 0,
@@ -582,45 +582,26 @@ public class TrainingService
                 EnergyPerUnit = qty > 0 ? (float)energy / (float)qty : 0,
 
                 // ── FEATURE TEMPORALI ──────────────────────────────────────────
-                // HourOfDay: cattura variazioni intragiornaliere
-                // (es. la produzione cala nelle ultime ore del turno per fatica operatori)
-                HourOfDay = current.Timestamp.Hour,
-
-                // DayOfWeek: cattura variazioni settimanali
-                // (es. il lunedì mattina le macchine sono "fredde" dopo il weekend)
-                DayOfWeek = (int)current.Timestamp.DayOfWeek,
-
-                // IsWeekend: binario, i turni di sabato/domenica hanno spesso
-                // crew ridotti e ritmi di produzione diversi
-                IsWeekend = (current.Timestamp.DayOfWeek == System.DayOfWeek.Saturday ||
-                             current.Timestamp.DayOfWeek == System.DayOfWeek.Sunday) ? 1 : 0,
-
-                // Shift: il turno di lavoro (1=mattina, 2=pomeriggio, 3=notte).
-                // I turni notturni tipicamente hanno performance diverse dagli altri.
-                Shift = current.Timestamp.Hour switch
+                HourOfDay = snap.Timestamp.Hour,
+                DayOfWeek = (int)snap.Timestamp.DayOfWeek,
+                IsWeekend = (snap.Timestamp.DayOfWeek == System.DayOfWeek.Saturday ||
+                             snap.Timestamp.DayOfWeek == System.DayOfWeek.Sunday) ? 1 : 0,
+                Shift = snap.Timestamp.Hour switch
                 {
-                    >= 6  and < 14 => 1,   // mattina
-                    >= 14 and < 22 => 2,   // pomeriggio
-                    _              => 3    // notte
+                    >= 6  and < 14 => 1,
+                    >= 14 and < 22 => 2,
+                    _              => 3
                 }
             };
 
-            // ── ROLLING WINDOWS (dal 3° elemento in poi) ───────────────────────
-            // Le medie degli ultimi 3 cicli catturano il "momentum" della macchina:
-            // se i cicli precedenti erano lenti, molto probabilmente anche il prossimo lo sarà.
-            // Questo introduce "memoria a breve termine" nel modello, che altrimenti
-            // tratta ogni ciclo come indipendente dagli altri.
-            //
-            // NOTA: i primi 2 elementi non hanno abbastanza storia → le rolling
-            // windows rimangono 0 (il default). Potrebbe essere migliorato con
-            // un'imputation basata sulla media globale.
+            // ── ROLLING WINDOWS (dal 3° snapshot in poi) ───────────────────────
             if (i >= 2)
             {
-                var last3 = ordered.Skip(i - 2).Take(3).ToList();
-                item.AvgQuantityLast3    = (float)last3.Average(x => (double)x.GetMetric("quantity_produced"));
-                item.AvgCycleTimeLast3   = (float)last3.Average(x => (double)x.GetMetric("cycle_time"));
-                item.AvgTemperatureLast3 = (float)last3.Average(x => (double)x.GetMetric("temperature"));
-                item.AvgEnergyLast3      = (float)last3.Average(x => (double)x.GetMetric("energy_consumption"));
+                var last3 = snapshots.Skip(i - 2).Take(3).ToList();
+                item.AvgQuantityLast3    = (float)last3.Average(s => (double)s.GetMetric("quantity_produced"));
+                item.AvgCycleTimeLast3   = (float)last3.Average(s => (double)s.GetMetric("cycle_time"));
+                item.AvgTemperatureLast3 = (float)last3.Average(s => (double)s.GetMetric("temperature"));
+                item.AvgEnergyLast3      = (float)last3.Average(s => (double)s.GetMetric("energy_consumption"));
             }
 
             enriched.Add(item);

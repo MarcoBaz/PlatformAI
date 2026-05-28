@@ -5,8 +5,7 @@ using PlatformAI.Infrastructure.Master;
 
 namespace PlatformAI.Infrastructure;
 
-
-public class BaseRepository<T> :IRepository<T> where T : Entity
+public class BaseRepository<T> : IBaseRepository<T> where T : BaseEntity
 {
     private readonly IDbContextResolver _resolver;
     DbSet<T> _dbSet => _resolver.Resolve<T>().Set<T>();
@@ -22,7 +21,7 @@ public class BaseRepository<T> :IRepository<T> where T : Entity
     }
 
 
-    public async Task<T?> GetByIdAsync(Guid id) =>await _dbSet.FindAsync(id);
+    public async Task<T?> GetByIdAsync(Guid id) => await _dbSet.FindAsync(id);
 
     public async Task<IReadOnlyList<T>> ListAsync(System.Linq.Expressions.Expression<Func<T, bool>>? predicate = null)
     {
@@ -35,17 +34,12 @@ public class BaseRepository<T> :IRepository<T> where T : Entity
     // Il salvataggio asincrono avverrà con CommitAsync() dell'UnitOfWork.
     public Task<T> AddAsync(T entity)
     {
-         entity.UserCreate = $"{_currentUser?.Name} {_currentUser?.Surname}";
-         entity.CreateDate = DateTime.UtcNow;
-         entity.UserModify = $"{_currentUser?.Name} {_currentUser?.Surname}";
-         entity.LastModifiedDate = DateTime.UtcNow;
+
         _dbSet.Add(entity);
         return Task.FromResult(entity);
     }
     public Task<T> UpdateAsync(T entity)
     {
-         entity.UserModify = $"{_currentUser?.Name} {_currentUser?.Surname}";
-         entity.LastModifiedDate = DateTime.UtcNow;
         _dbSet.Update(entity);
         return Task.FromResult(entity);
     }
@@ -61,5 +55,5 @@ public class BaseRepository<T> :IRepository<T> where T : Entity
         return _dbSet.Where(predicate).AsQueryable();
     }
 
- 
+
 }

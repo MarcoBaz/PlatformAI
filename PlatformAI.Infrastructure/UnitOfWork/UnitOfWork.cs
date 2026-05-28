@@ -39,9 +39,18 @@ public class UnitOfWork : IUnitOfWork
         if (_repositories.TryGetValue(typeof(TEntity), out var repo))
             return (IRepository<TEntity>)repo;
 
-        var repository = new BaseRepository<TEntity>(_resolver, _currentUserService);
+        var repository = new Repository<TEntity>(_resolver, _currentUserService);
         _repositories[typeof(TEntity)] = repository;
         return (IRepository<TEntity>)repository;
+    }
+    public IBaseRepository<TEntity> BaseRepository<TEntity>() where TEntity : BaseEntity
+    {
+        if (_repositories.TryGetValue(typeof(TEntity), out var repo))
+            return (IBaseRepository<TEntity>)repo;
+
+        var repository = new BaseRepository<TEntity>(_resolver, _currentUserService);
+        _repositories[typeof(TEntity)] = repository;
+        return (IBaseRepository<TEntity>)repository;
     }
 
     public async Task CommitAsync()

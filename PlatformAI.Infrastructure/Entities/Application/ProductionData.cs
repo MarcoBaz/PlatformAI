@@ -12,16 +12,13 @@ public class ProductionData : Entity
 
     public DateTime Timestamp { get; set; }
 
-    /// <summary>
-    /// Valori delle metriche associate a questo record di produzione.
-    /// Ogni metrica è definita in MetricType (es. Temperature, QuantityProduced, ...).
-    /// </summary>
-    public ICollection<ProductionDataMetric> Metrics { get; set; } = new List<ProductionDataMetric>();
+    public Guid MetricTypeId { get; set; }
+    public MetricType MetricType { get; set; } = null!;
 
     /// <summary>
-    /// Legge il valore di una metrica per nome. Restituisce defaultValue se non presente.
-    /// Richiede che Metrics e MetricType siano caricati (Include).
+    /// Valore misurato per questa metrica
     /// </summary>
-    public decimal GetMetric(string metricTypeName, decimal defaultValue = 0)
-        => Metrics.FirstOrDefault(m => m.MetricType?.Name == metricTypeName)?.Value ?? defaultValue;
+    public decimal Value { get; set; }
+
+
 }

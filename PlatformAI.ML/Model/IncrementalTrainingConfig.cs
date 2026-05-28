@@ -82,18 +82,25 @@ public class TrainingResultInternal
 
 public class ProductionDataEnriched
 {
-    public int QuantityProduced { get; set; }
-    public int ScrapQuantity { get; set; }
-    public decimal CycleTime { get; set; }
-    public decimal EnergyConsumption { get; set; }
-    public decimal Temperature { get; set; }
+    // Metriche base — float per coerenza con l'intera pipeline ML.NET
+    public float QuantityProduced { get; set; }
+    public float ScrapQuantity { get; set; }
+    public float CycleTime { get; set; }
+    public float EnergyConsumption { get; set; }
+    public float Temperature { get; set; }
+
+    // Feature derivate
     public float ScrapRate { get; set; }
     public float EffectiveProductionRate { get; set; }
     public float EnergyPerUnit { get; set; }
+
+    // Feature temporali
     public int HourOfDay { get; set; }
     public int DayOfWeek { get; set; }
     public int IsWeekend { get; set; }
     public int Shift { get; set; }
+
+    // Rolling windows
     public float AvgQuantityLast3 { get; set; }
     public float AvgCycleTimeLast3 { get; set; }
     public float AvgTemperatureLast3 { get; set; }

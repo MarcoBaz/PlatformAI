@@ -1,0 +1,183 @@
+<div class="flex flex-col flex-auto min-w-0 bg-gray-50 dark:bg-gray-900 min-h-screen">
+
+    <!-- ════════ HEADER ════════ -->
+    <div class="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 border-b shadow-sm">
+        <div>
+            <h1 class="text-xl font-semibold tracking-tight">Dipartimenti</h1>
+            <p class="text-sm text-secondary mt-0.5">Gestisci i dipartimenti del tuo stabilimento</p>
+        </div>
+        <button mat-flat-button color="primary" (click)="openCreate()">
+            <mat-icon svgIcon="heroicons_outline:plus" class="mr-1 icon-size-4"></mat-icon>
+            Nuovo Dipartimento
+        </button>
+    </div>
+
+    <div class="p-6">
+
+        <!-- ════════ CARD TABELLA ════════ -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border overflow-hidden">
+
+            <!-- Barra refresh -->
+            <mat-progress-bar *ngIf="isLoading && departments.length > 0"
+                              mode="indeterminate" class="w-full">
+            </mat-progress-bar>
+
+            <!-- Spinner iniziale -->
+            <div *ngIf="isLoading && departments.length === 0"
+                 class="flex flex-col items-center py-12 gap-3">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="text-sm text-secondary">Caricamento dipartimenti…</p>
+            </div>
+
+            <!-- Errore -->
+            <div *ngIf="loadError"
+                 class="flex items-start gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 m-4 rounded">
+                <mat-icon svgIcon="heroicons_outline:exclamation-triangle"
+                          class="icon-size-5 text-red-600 flex-shrink-0 mt-0.5"></mat-icon>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-red-800 dark:text-red-300">Errore nel caricamento</p>
+                    <p class="text-xs text-red-600 dark:text-red-400 mt-0.5">{{ loadError }}</p>
+                </div>
+                <button mat-stroked-button class="text-xs flex-shrink-0" (click)="load()">
+                    <mat-icon svgIcon="heroicons_outline:arrow-path" class="icon-size-4 mr-1"></mat-icon>
+                    Riprova
+                </button>
+            </div>
+
+            <!-- Empty -->
+            <div *ngIf="!isLoading && !loadError && departments.length === 0"
+                 class="flex flex-col items-center py-14 text-secondary">
+                <mat-icon svgIcon="heroicons_outline:building-office-2"
+                          class="icon-size-14 mb-3 opacity-25"></mat-icon>
+                <p class="text-sm">Nessun dipartimento. Creane uno con il pulsante in alto.</p>
+            </div>
+
+            <!-- Tabella -->
+            <table *ngIf="departments.length > 0" class="w-full text-sm"
+                   [class.opacity-60]="isLoading">
+                <thead class="bg-gray-50 dark:bg-gray-700 text-xs uppercase tracking-wider text-secondary">
+                    <tr>
+                        <th class="px-5 py-3 text-left font-medium">Codice</th>
+                        <th class="px-5 py-3 text-left font-medium">Nome</th>
+                        <th class="px-5 py-3 text-left font-medium hidden md:table-cell">Descrizione</th>
+                        <th class="px-5 py-3 text-center font-medium hidden sm:table-cell">Linee</th>
+                        <th class="px-5 py-3 text-center font-medium">Stato</th>
+                        <th class="px-5 py-3 text-right font-medium">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let dept of departments; trackBy: trackById"
+                        class="border-t hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+
+                        <td class="px-5 py-3 font-mono font-semibold text-indigo-600 dark:text-indigo-300">
+                            {{ dept.code }}
+                        </td>
+
+                        <td class="px-5 py-3 font-medium">{{ dept.name }}</td>
+
+                        <td class="px-5 py-3 text-secondary hidden md:table-cell max-w-xs truncate">
+                            {{ dept.description || '—' }}
+                        </td>
+
+                        <td class="px-5 py-3 text-center hidden sm:table-cell">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
+                                         bg-indigo-100 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-200">
+                                {{ dept.productionLinesCount }}
+                            </span>
+                        </td>
+
+                        <td class="px-5 py-3 text-center">
+                            <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                  [class]="dept.isActive
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                      : 'bg-gray-200 text-gray-500'">
+                                {{ dept.isActive ? 'Attivo' : 'Inattivo' }}
+                            </span>
+                        </td>
+
+                        <td class="px-5 py-3 text-right">
+                            <button mat-icon-button matTooltip="Modifica"
+                                    (click)="openEdit(dept, $event)">
+                                <mat-icon svgIcon="heroicons_outline:pencil-square" class="icon-size-4"></mat-icon>
+                            </button>
+                            <button mat-icon-button color="warn"
+                                    [disabled]="deletingId === dept.id || dept.productionLinesCount > 0"
+                                    [matTooltip]="dept.productionLinesCount > 0 ? 'Ha linee associate, non eliminabile' : 'Elimina'"
+                                    (click)="delete(dept, $event)">
+                                <mat-spinner *ngIf="deletingId === dept.id" diameter="16"></mat-spinner>
+                                <mat-icon *ngIf="deletingId !== dept.id"
+                                          svgIcon="heroicons_outline:trash" class="icon-size-4">
+                                </mat-icon>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     MODAL – DIPARTIMENTO
+════════════════════════════════════════════ -->
+<div *ngIf="showModal"
+     class="fixed inset-0 z-50 flex items-center justify-center"
+     style="background: rgba(0,0,0,0.45);"
+     (click)="closeModal()">
+
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+         (click)="$event.stopPropagation()">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b">
+            <h2 class="font-semibold text-base">
+                {{ modalMode === 'create' ? 'Nuovo Dipartimento' : 'Modifica Dipartimento' }}
+            </h2>
+            <button mat-icon-button (click)="closeModal()">
+                <mat-icon svgIcon="heroicons_outline:x-mark"></mat-icon>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <form [formGroup]="form" class="px-6 py-4 flex flex-col gap-3">
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Codice</mat-label>
+                <input matInput formControlName="code" placeholder="es. DEPT-01" maxlength="20" autocomplete="off">
+                <mat-error *ngIf="form.get('code')?.hasError('required')">Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Nome</mat-label>
+                <input matInput formControlName="name" placeholder="es. Produzione Nord" autocomplete="off">
+                <mat-error *ngIf="form.get('name')?.hasError('required')">Obbligatorio</mat-error>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-full">
+                <mat-label>Descrizione (opzionale)</mat-label>
+                <textarea matInput formControlName="description" rows="2"
+                          placeholder="Breve descrizione…"></textarea>
+            </mat-form-field>
+
+            <div *ngIf="modalMode === 'edit'" class="flex items-center gap-3 py-1">
+                <mat-slide-toggle formControlName="isActive" color="primary">
+                    Dipartimento attivo
+                </mat-slide-toggle>
+            </div>
+
+        </form>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 dark:bg-gray-750">
+            <button mat-stroked-button (click)="closeModal()">Annulla</button>
+            <button mat-flat-button color="primary"
+                    [disabled]="form.invalid || isSaving"
+                    (click)="save()">
+                <mat-spinner *ngIf="isSaving" diameter="18" class="mr-2"></mat-spinner>
+                {{ modalMode === 'create' ? 'Crea Dipartimento' : 'Salva Modifiche' }}
+            </button>
+        </div>
+    </div>
+</div>

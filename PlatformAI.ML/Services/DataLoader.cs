@@ -24,8 +24,7 @@ public class DataLoader
                             .Include(p=> p.Machine)
                                 .ThenInclude(m=> m.ProductionLine)
                                      .ThenInclude(p=> p.Department)
-                            .Include(p => p.Metrics)
-                                .ThenInclude(m => m.MetricType)
+                            .Include(p => p.MetricType)
                             .ToList();
         return productions?.Any() == true ? productions : new List<ProductionData>();
     }

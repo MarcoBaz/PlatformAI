@@ -17,7 +17,6 @@ public class ApplicationContext : DbContext, IAppDbContext
     public DbSet<Log> Logs => Set<Log>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<MetricType> MetricTypes => Set<MetricType>();
-    public DbSet<ProductionDataMetric> ProductionDataMetrics => Set<ProductionDataMetric>();
 
     public ApplicationContext() { }
 
@@ -43,25 +42,17 @@ public class ApplicationContext : DbContext, IAppDbContext
                 .HasDefaultValueSql("NEWSEQUENTIALID()");
         }
 
-        // Machine → ProductionLine (Restrict per evitare cascade delete multipli)
-        modelBuilder.Entity<Machine>()
-            .HasOne(p => p.ProductionLine)
-            .WithMany()
-            .HasForeignKey(p => p.ProductionLineId)
+        modelBuilder.Entity<ProductionLine>()
+            .HasMany(p => p.Machines)
+            .WithOne(m => m.ProductionLine)
+            .HasForeignKey(m => m.ProductionLineId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // ProductionDataMetric → ProductionData
-        modelBuilder.Entity<ProductionDataMetric>()
-            .HasOne(m => m.ProductionData)
-            .WithMany(pd => pd.Metrics)
-            .HasForeignKey(m => m.ProductionDataId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // ProductionDataMetric → MetricType
-        modelBuilder.Entity<ProductionDataMetric>()
-            .HasOne(m => m.MetricType)
-            .WithMany(mt => mt.ProductionDataMetrics)
-            .HasForeignKey(m => m.MetricTypeId)
+        // ProductionData → MetricType (ogni record è la lettura di una metrica specifica)
+        modelBuilder.Entity<ProductionData>()
+            .HasOne(pd => pd.MetricType)
+            .WithMany()
+            .HasForeignKey(pd => pd.MetricTypeId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
